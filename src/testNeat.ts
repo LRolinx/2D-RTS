@@ -290,14 +290,19 @@ class Snake {
         //更新吃食物
         this.checkForFruit();
 
-        //蛇离食物越近加分
+        
         const dx = Math.abs(this.xCor[this.xCor.length - 1] - this.xFruit);
         const dy = Math.abs(this.yCor[this.yCor.length - 1] - this.yFruit);
         const num = (this.dist = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2)));
         if (this.dist < this.currenDis) {
+            //蛇离食物越近加分
             this.currenDis = num;
             this.score += 1;
             // console.log(this.score);
+        }else {
+            //越来越远扣分
+            this.currenDis = num;
+            this.score -= 1;
         }
     }
 
@@ -323,8 +328,7 @@ class Snake {
     }
 }
 
-let snake = new Snake();
-let psize = 30;//蛇数量 150
+let psize = 2;//蛇数量 150
 let snakes: any[] = [];
 let hyperparams = new Hyperparameters();
 hyperparams.default_activation = activation.RELU
@@ -364,14 +368,14 @@ p5.setup = () => {
 
         for (let i = 0, len = snakes.length; i < len; i++) {
             if (!snakes[i].dead) {
-                snakes[i].blood -= 5;
+                snakes[i].blood -= 2;
             }
         }
     }, 1000);
 };
 
 p5.draw = () => {
-    for (let b = 0, len = 10; b < len; b++) {
+    for (let b = 0, len = 1; b < len; b++) {
         p5.background(40, 44, 52);
 
         for (let i = 0, len = snakes.length; i < len; i++) {
@@ -420,6 +424,7 @@ p5.draw = () => {
             
             if(neat.should_evolve()) {
                 neat.next_iteration();
+                console.log(neat);
                 console.log(neat._global_best);
             }
         }

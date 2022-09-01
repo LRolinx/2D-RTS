@@ -66,16 +66,29 @@ export function difference<T>(a: Set<T>, b: Set<T>) {
   return differenceSet;
 }
 
-export function max(a: Set<any>, b: Set<any>, key = 'max') {
+/**
+ * 返回最大的值
+ * @param a 
+ * @param b 
+ * @param key 
+ * @returns 
+ */
+export const max = (a: Set<any>, b: Set<any>, key = 'max'): Set<any> => {
   if (key == 'len') {
     if (a.size > b.size) {
       return a;
     }
     return b;
   }
+  return new Set();
 }
 
-export function sum(a: number[]): number {
+/**
+ * 计算所有数字的合并
+ * @param a 
+ * @returns 
+ */
+export const sum = (a: number[]): number => {
   let num = 0;
   for (const i of a) {
     num += i;
@@ -531,15 +544,15 @@ export class Genome {
       //   console.log("前向->",_from,i,sp[1],sp[0]);
       //   console.log(this._edges);
       // }
-      if(parseInt(sp[1]) in _from) {
+      if (parseInt(sp[1]) in _from) {
         //已经有了
         _from[parseInt(sp[1])].push(parseInt(sp[0]));
-      }else {
+      } else {
         //还没有
         _from[parseInt(sp[1])] = [];
         _from[parseInt(sp[1])].push(parseInt(sp[0]));
       }
-      
+
     }
 
     //计算每个节点的输出值
@@ -551,8 +564,12 @@ export class Genome {
     for (const j of ordered_nodes) {
       let ax = 0;
       for (const i in _from[j]) {
-        if(this._edges[`${i},${j}`].weight === undefined) {
-          console.log(`触发->${this._edges[`${i},${j}`]}/${this._edges}/${_from}/${ordered_nodes}`)
+        if (this._edges[`${i},${j}`] === undefined) {
+          console.log(`触发->`);
+          console.log(ordered_nodes);
+          console.log(_from);
+          console.log(this._edges);
+          console.log([`${i},${j}`]);
         }
         ax += this._edges[`${i},${j}`].weight * this._nodes[Number(i)].output;
       }
@@ -571,7 +588,7 @@ export class Genome {
    * 随机突变基因组以启动变异。
    * @param probabilities 
    */
-  mutate(probabilities) {
+  mutate(probabilities: { [key: string]: number }) {
     if (this.is_disabled()) {
       this.add_enabled();
     }
@@ -621,7 +638,7 @@ export class Genome {
     this.add_edge(new_node, parseInt(sp[1]), edge.weight);
   }
 
-  add_edge(i, j, weight) {
+  add_edge(i: number, j: number, weight: number) {
     //在现有节点之间添加新连接。
     if (`${i},${j}` in this._edges) {
 
@@ -646,13 +663,13 @@ export class Genome {
     }
   }
 
-  shift_weight(type) {
+  shift_weight(type: string) {
     //随机移动、扰动或设置边缘权重之一。
 
     const e = choice(Object.keys(this._edges));
-    if (type == 'weight_perturb') {
+    if (type === 'weight_perturb') {
       this._edges[e].weight += uniform(-1, 1);
-    } else if (type == 'weight_set') {
+    } else if (type === 'weight_set') {
       this._edges[e].weight = uniform(-1, 1);
     }
   }
@@ -700,7 +717,7 @@ export class Genome {
     return [i, j];
   }
 
-  is_input(n) {
+  is_input(n: number) {
     //确定节点 ID 是否为输入。
     if (0 <= n) {
       if (n < this._inputs) {
@@ -710,7 +727,7 @@ export class Genome {
     return false;
   }
 
-  is_output(n) {
+  is_output(n: number) {
     //确定节点 ID 是否为输出。
     if (this._inputs <= n) {
       if (n < this._unhidden) {
@@ -720,7 +737,7 @@ export class Genome {
     return false;
   }
 
-  is_hidden(n) {
+  is_hidden(n: number) {
     //确定节点 id 是否隐藏。
     if (this._unhidden <= n) {
       if (n < this._max_node) {
@@ -792,7 +809,7 @@ export class Specie {
   _fitness_sum: number;
   _max_fitness_history: number;
 
-  constructor(max_fitness_history, members: Genome) {
+  constructor(max_fitness_history: number, members: Genome) {
     //*members 元组
     this._members = [members];
     this._fitness_history = [];
@@ -805,7 +822,7 @@ export class Specie {
     breed_probabilities: {
       [key: string]: number;
     },
-  ) {
+  ): Genome {
     //作为变异克隆的结果返回一个孩子
     // 或两个亲本基因组之间的交叉。
     //变异一个克隆或繁殖两个随机基因组
@@ -816,7 +833,7 @@ export class Specie {
     }
 
     const cho = choices(population, probabilities)[0];
-    let child: Genome;
+    let child: Genome = new Genome(0, 0, activation.SIGMOID);
 
     if (cho == 'asexual' || this._members.length == 1) {
       child = copy(choice(this._members));
@@ -844,7 +861,7 @@ export class Specie {
     }
   }
 
-  cull_genomes(fittest_only) {
+  cull_genomes(fittest_only: boolean) {
     //消灭每个物种最弱的基因组。
     this._members = this._members.sort((a, b) => b._fitness - a._fitness);
     let remaining;
@@ -919,6 +936,7 @@ export default class Neat {
     this._generation = 0;
     this._current_species = 0;
     this._current_genome = 0;
+    this._global_best = new Genome(this._inputs, this._outputs, hyperparams.default_activation)
 
     this.generate();
   }
@@ -1113,7 +1131,7 @@ export default class Neat {
   }
 
   evaluate_parallel(
-    evaluator,
+    // evaluator,
     args: [string, number],
     kwargs: { [key: string]: number },
   ) {
