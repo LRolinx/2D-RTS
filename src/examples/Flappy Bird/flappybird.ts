@@ -122,11 +122,11 @@ class Pipe {
     }
 }
 
-const TOTAL = 300;
+const TOTAL = 150;
 let birds = [];
 let pipes = [];
 let hyperparams = new Hyperparameters();
-hyperparams.default_activation = activation.LEAKY_RELU
+hyperparams.default_activation = activation.SIGMOID
 let counter = 0;
 let slider;
 let neat = new Neat(5, 1, TOTAL);
@@ -223,4 +223,20 @@ p5.draw = () => {
     for (let pipe of pipes) {
         pipe.show();
     }
+}
+
+p5.keyPressed = (e) => {
+    console.log(e.keyCode)
+    //按下p保存
+    if (e.keyCode === 80) {
+        neat.export(`flappybird-[${Date.now()}]`)
+    } else if (e.keyCode === 79) {
+        //按下o进行加速或者正常速度运行
+        if (isFastSpeed) {
+            isFastSpeed = false;
+        } else {
+            isFastSpeed = true;
+        }
+    }
+
 }
