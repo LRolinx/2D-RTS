@@ -2,6 +2,7 @@ import P5 from 'p5';
 import Neat, { activation, Hyperparameters } from "./NeatNetwork";
 
 const p5 = new P5(() => { });
+let isFastSpeed = true;
 
 
 class Snake {
@@ -371,12 +372,12 @@ p5.setup = () => {
                 snakes[i].blood -= 1;
             }
         }
-    }, 100);
+    }, isFastSpeed ? 100 : 1000);
 };
 
 p5.draw = () => {
     //运行次数约等于计算次数，可以加速
-    for (let b = 0, len = 10; b < len; b++) {
+    for (let b = 0, len = isFastSpeed ? 10 : 1; b < len; b++) {
         p5.background(40, 44, 52);
 
         for (let i = 0, len = snakes.length; i < len; i++) {
@@ -425,9 +426,6 @@ p5.draw = () => {
 
             if (neat.should_evolve()) {
                 neat.next_iteration();
-                if(neat.get_current_genome() === 0) {
-                    neat.export(`snake[${neat.get_current_species()}代]`)
-                }
                 console.log(neat);
                 console.log(neat._global_best);
             }
@@ -438,3 +436,20 @@ p5.draw = () => {
         snakes[i].show();
     }
 };
+
+p5.keyPressed = (e) => {
+    console.log(e.keyCode)
+    //按下p保存
+    if (e.keyCode === 80) {
+        neat.export(`snake-[${Date.now()}]`)
+    } else if (e.keyCode === 79) {
+        //按下o进行加速或者正常速度运行
+        if (isFastSpeed) {
+            isFastSpeed = false;
+
+        } else {
+            isFastSpeed = true;
+        }
+    }
+
+}

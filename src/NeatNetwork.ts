@@ -558,13 +558,6 @@ export class Genome {
     for (const j of ordered_nodes) {
       let ax = 0;
       for (const i of _from[j]) {
-        if (this._edges[`${i},${j}`] === undefined) {
-          console.log(`触发->`);
-          console.log(ordered_nodes);
-          console.log(_from);
-          console.log(this._edges);
-          console.log([`${i},${j}`]);
-        }
         ax += this._edges[`${i},${j}`].weight * this._nodes[Number(i)].output;
       }
       const node: Node = this._nodes[j];
@@ -635,10 +628,10 @@ export class Genome {
   add_edge(i: number, j: number, weight: number) {
     //在现有节点之间添加新连接。
     if (`${i},${j}` in this._edges) {
-
+      console.log("启动新连接",this._edges,[`${i},${j}`],weight)
       this._edges[`${i},${j}`].enabled = true;
     } else {
-
+      console.log("创建新连接",this._edges,[`${i},${j}`],weight)
       this._edges[`${i},${j}`] = new Edge(weight);
     }
   }
