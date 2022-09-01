@@ -1,5 +1,5 @@
 import P5 from 'p5';
-import Neat, { activation, Hyperparameters } from "./NeatNetwork";
+import Neat, { activation, Hyperparameters } from "../../NeatNetwork";
 
 const p5 = new P5(() => { });
 let isFastSpeed = true;
