@@ -540,15 +540,9 @@ export class Genome {
         continue;
       }
 
-      // if(_from[parseInt(sp[1])] === null || _from[parseInt(sp[1])] === undefined || _from[parseInt(sp[1])] === {}) {
-      //   console.log("前向->",_from,i,sp[1],sp[0]);
-      //   console.log(this._edges);
-      // }
       if (parseInt(sp[1]) in _from) {
-        //已经有了
         _from[parseInt(sp[1])].push(parseInt(sp[0]));
       } else {
-        //还没有
         _from[parseInt(sp[1])] = [];
         _from[parseInt(sp[1])].push(parseInt(sp[0]));
       }
@@ -563,7 +557,7 @@ export class Genome {
 
     for (const j of ordered_nodes) {
       let ax = 0;
-      for (const i in _from[j]) {
+      for (const i of _from[j]) {
         if (this._edges[`${i},${j}`] === undefined) {
           console.log(`触发->`);
           console.log(ordered_nodes);
@@ -906,7 +900,13 @@ export default class Neat {
   _population: number;
   _hyperparams: Hyperparameters;
   _generation: number;
+  /**
+   * 种族代数
+   */
   _current_species: number;
+  /**
+   * 学习次数
+   */
   _current_genome: number;
   _global_best: Genome;
 

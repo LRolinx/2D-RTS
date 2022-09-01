@@ -290,7 +290,7 @@ class Snake {
         //更新吃食物
         this.checkForFruit();
 
-        
+
         const dx = Math.abs(this.xCor[this.xCor.length - 1] - this.xFruit);
         const dy = Math.abs(this.yCor[this.yCor.length - 1] - this.yFruit);
         const num = (this.dist = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2)));
@@ -299,7 +299,7 @@ class Snake {
             this.currenDis = num;
             this.score += 1;
             // console.log(this.score);
-        }else {
+        } else {
             //越来越远扣分
             this.currenDis = num;
             this.score -= 1;
@@ -328,10 +328,10 @@ class Snake {
     }
 }
 
-let psize = 2;//蛇数量 150
+let psize = 150;//蛇数量 150
 let snakes: any[] = [];
 let hyperparams = new Hyperparameters();
-hyperparams.default_activation = activation.RELU
+hyperparams.default_activation = activation.TANH
 let neat = new Neat(8, 1, psize, hyperparams);
 
 // let config = new NeatConfig();
@@ -368,14 +368,15 @@ p5.setup = () => {
 
         for (let i = 0, len = snakes.length; i < len; i++) {
             if (!snakes[i].dead) {
-                snakes[i].blood -= 2;
+                snakes[i].blood -= 1;
             }
         }
-    }, 1000);
+    }, 100);
 };
 
 p5.draw = () => {
-    for (let b = 0, len = 1; b < len; b++) {
+    //运行次数约等于计算次数，可以加速
+    for (let b = 0, len = 10; b < len; b++) {
         p5.background(40, 44, 52);
 
         for (let i = 0, len = snakes.length; i < len; i++) {
@@ -390,19 +391,19 @@ p5.draw = () => {
             //如果是空的不做操作
             if (desicions === null || desicions === undefined) break;
 
-            if (desicions[0] <= 25) {
+            if (desicions[0] <= -0.5) {
                 // if (snakes[i].direction === 1) {
                 snakes[i].move(0);
                 // }
-            } else if (desicions[0] <= 50) {
+            } else if (desicions[0] <= 0) {
                 // if (snakes[i].direction === 0) {
                 snakes[i].move(1);
                 // }
-            } else if (desicions[0] <= 75) {
+            } else if (desicions[0] <= 0.5) {
                 // if (snakes[i].direction === 3) {
                 snakes[i].move(2);
                 // }
-            } else if (desicions[0] <= 100) {
+            } else if (desicions[0] <= 1) {
                 // if (snakes[i].direction === 2) {
                 snakes[i].move(3);
                 // }
@@ -421,9 +422,12 @@ p5.draw = () => {
                 neat.get_genomes()[i].set_fitness(snakes[i].score)
                 snakes[i] = new Snake();
             }
-            
-            if(neat.should_evolve()) {
+
+            if (neat.should_evolve()) {
                 neat.next_iteration();
+                if(neat.get_current_genome() === 0) {
+                    neat.export(`snake[${neat.get_current_species()}代]`)
+                }
                 console.log(neat);
                 console.log(neat._global_best);
             }
