@@ -96,6 +96,12 @@ export const sum = (a: number[]): number => {
   return num;
 }
 
+/**
+ * 未知
+ * @param a 
+ * @param n 
+ * @returns 
+ */
 export function sample(a: Genome[], n: number) {
   if (n > a.length) return [];
   const obj: Genome[] = [];
@@ -140,7 +146,7 @@ export function choices(o: any[], w: any[] = [], k = 1) {
     }
   }
 
-  //打乱数组
+  //洗牌
   ls = shuffle(ls);
 
   for (let i = 0; i < k; i++) {
@@ -628,10 +634,10 @@ export class Genome {
   add_edge(i: number, j: number, weight: number) {
     //在现有节点之间添加新连接。
     if (`${i},${j}` in this._edges) {
-      console.log("启动新连接",this._edges,[`${i},${j}`],weight)
+      console.log("启动新连接", this._edges, [`${i},${j}`], weight)
       this._edges[`${i},${j}`].enabled = true;
     } else {
-      console.log("创建新连接",this._edges,[`${i},${j}`],weight)
+      console.log("创建新连接", this._edges, [`${i},${j}`], weight)
       this._edges[`${i},${j}`] = new Edge(weight);
     }
   }
@@ -675,7 +681,7 @@ export class Genome {
     }
   }
 
-  random_pair() {
+  random_pair = (): number[] => {
     // 生成随机节点 (i, j) 使得：
     //    1. i 不是输出
     //    2. j 不是输入
@@ -704,7 +710,7 @@ export class Genome {
     return [i, j];
   }
 
-  is_input(n: number) {
+  is_input = (n: number): boolean => {
     //确定节点 ID 是否为输入。
     if (0 <= n) {
       if (n < this._inputs) {
@@ -714,7 +720,7 @@ export class Genome {
     return false;
   }
 
-  is_output(n: number) {
+  is_output = (n: number): boolean => {
     //确定节点 ID 是否为输出。
     if (this._inputs <= n) {
       if (n < this._unhidden) {
@@ -724,7 +730,7 @@ export class Genome {
     return false;
   }
 
-  is_hidden(n: number) {
+  is_hidden = (n: number): boolean => {
     //确定节点 id 是否隐藏。
     if (this._unhidden <= n) {
       if (n < this._max_node) {
@@ -734,7 +740,7 @@ export class Genome {
     return false;
   }
 
-  is_disabled() {
+  is_disabled = (): boolean => {
     //确定它的所有基因是否都被禁用。
     const data = [];
     for (const i in this._edges) {
@@ -748,32 +754,32 @@ export class Genome {
     return false;
   }
 
-  get_fitness() {
+  get_fitness = (): number => {
     //返回基因组的适应度。
     return this._fitness;
   }
 
-  get_nodes() {
+  get_nodes = () => {
     //获取网络的节点。
     return copy(this._nodes);
   }
 
-  get_edges() {
+  get_edges = () => {
     //获取网络的边缘。
     return copy(this._edges);
   }
 
-  get_num_nodes() {
+  get_num_nodes = (): number => {
     //获取网络中的节点数。
     return this._max_node;
   }
 
-  set_fitness(score: number) {
+  set_fitness = (score: number) => {
     //设置这个基因组的适应度分数。
     this._fitness = score;
   }
 
-  reset() {
+  reset = () => {
     //重置基因组的内部状态。
     for (let n = 0; n < this._max_node; n++) {
       this._nodes[n].output = 0;
@@ -781,7 +787,7 @@ export class Genome {
     this._fitness = 0;
   }
 
-  clone() {
+  clone = (): Genome => {
     //克隆深拷贝。
     return deepcopy(this);
   }
@@ -804,12 +810,12 @@ export class Specie {
     this._max_fitness_history = max_fitness_history;
   }
 
-  breed(
+  breed = (
     mutation_probabilities: { [key: string]: number },
     breed_probabilities: {
       [key: string]: number;
     },
-  ): Genome {
+  ): Genome => {
     //作为变异克隆的结果返回一个孩子
     // 或两个亲本基因组之间的交叉。
     //变异一个克隆或繁殖两个随机基因组
@@ -832,7 +838,7 @@ export class Specie {
     return child;
   }
 
-  update_fitness() {
+  update_fitness = () => {
     //更新每个基因组的调整适应值
     // 和历史适应度。
     let num = 0;
@@ -848,7 +854,7 @@ export class Specie {
     }
   }
 
-  cull_genomes(fittest_only: boolean) {
+  cull_genomes = (fittest_only: boolean) => {
     //消灭每个物种最弱的基因组。
     this._members = this._members.sort((a, b) => b._fitness - a._fitness);
     let remaining;
@@ -863,7 +869,7 @@ export class Specie {
     this._members = this._members.slice(0, remaining);
   }
 
-  get_best(): Genome {
+  get_best = (): Genome => {
     //获得体能得分最高的会员。
     const data = this._members.filter((x) => x._fitness);
     if (data.length == 0) {
@@ -872,7 +878,7 @@ export class Specie {
     return data[0];
   }
 
-  can_progress() {
+  can_progress = (): boolean => {
     //确定物种是否应该在扑杀后幸存下来。
     const n = this._fitness_history.length;
     const avg = sum(this._fitness_history) / n;
@@ -936,7 +942,7 @@ export default class Neat {
   /**
    * 生成初始基因组群。
    */
-  generate() {
+  generate = () => {
     for (let i = 0; i < this._population; i++) {
       const g = new Genome(
         this._inputs,
@@ -952,7 +958,7 @@ export default class Neat {
     this.update_genomes()
   }
 
-  classify_genome(genome: Genome) {
+  classify_genome = (genome: Genome) => {
     //通过基因组将基因组分类为物种
     // 距离算法。
     if (this._species.length == 0) {
@@ -984,7 +990,7 @@ export default class Neat {
   /**
    * 更新整个种群的最高适应度分数。
    */
-  update_fittest() {
+  update_fittest = () => {
     const top_performers: Genome[] = [];
     for (const s of this._species) {
       top_performers.push(s.get_best());
@@ -1016,7 +1022,7 @@ export default class Neat {
    * 基因组并重新填充突变的儿童，优先考虑
    * 最有前途的物种
    */
-  evolve() {
+  evolve = () => {
     let global_fitness_sum = 0;
     for (const s of this._species) {
       s.update_fitness();
@@ -1089,7 +1095,7 @@ export default class Neat {
    * 确定系统是否应该继续发展
    * @returns 
    */
-  should_evolve() {
+  should_evolve = (): boolean => {
     // 基于最大适应度和代数。
     this.update_fittest();
     //更新所有个基因
@@ -1103,7 +1109,7 @@ export default class Neat {
   /**
    * 在每次评估个体基因组后调用
    */
-  next_iteration() {
+  next_iteration = () => {
     // 进步训练。
     const s = this._species[this._current_species];
     if (this._current_genome < s._members.length - 1) {
@@ -1123,29 +1129,35 @@ export default class Neat {
     }
   }
 
-  evaluate_parallel(
-    // evaluator,
-    args: [string, number],
-    kwargs: { [key: string]: number },
-  ) {
-    //并行评估 ***********暂时用不到
-    //*args元组 **kwargs字典
-    //在单独的过程中评估整个群体
-    // 进行训练。 评估器功能必须采用基因组
-    // 作为它的第一个参数并返回一个数字适应度分数。
-    // 任何传递给评估器的全局状态都会被复制，并且不会
-    // 在父进程中进行修改。
-    // const max_proc = max(mp.cpu_count() - 1, 1)
-    // const pool = mp.Pool(processes = max_proc)
-  }
+  // evaluate_parallel(
+  //   // evaluator,
+  //   args: [string, number],
+  //   kwargs: { [key: string]: number },
+  // ) {
+  //   //并行评估 ***********暂时用不到
+  //   //*args元组 **kwargs字典
+  //   //在单独的过程中评估整个群体
+  //   // 进行训练。 评估器功能必须采用基因组
+  //   // 作为它的第一个参数并返回一个数字适应度分数。
+  //   // 任何传递给评估器的全局状态都会被复制，并且不会
+  //   // 在父进程中进行修改。
+  //   // const max_proc = max(mp.cpu_count() - 1, 1)
+  //   // const pool = mp.Pool(processes = max_proc)
+  // }
 
-  get_fittest() {
-    //返回具有最高全局适应度分数的基因组。
+  /**
+   * 返回具有最高全局适应度分数的基因组。
+   * @returns 
+   */
+  get_fittest = (): Genome => {
     return this._global_best;
   }
 
-  get_population() {
-    //返回真实的（计算出的）人口规模。
+  /**
+   * 返回真实的（计算出的）人口规模。
+   * @returns 
+   */
+  get_population = (): number => {
     const lenarr = [];
     for (const s of this._species) {
       lenarr.push(s._members.length);
@@ -1157,7 +1169,7 @@ export default class Neat {
    * 获取当前基因组进行评估。
    * @returns 
    */
-  get_current() {
+  get_current = (): Genome => {
     const s: Specie = this._species[this._current_species];
     return s._members[this._current_genome];
   }
@@ -1206,7 +1218,7 @@ export default class Neat {
    * @param filename 文件名
    * @param suffix 后缀
    */
-  export(filename: string = 'neat', suffix: string = 'pkl') {
+  export = (filename: string = 'neat', suffix: string = 'pkl') => {
     this.downloadfun(JSON.stringify(this), `${filename}.${suffix}`)
   }
 
@@ -1227,11 +1239,7 @@ export default class Neat {
    * @param suffix 后缀名
    * @returns 
    */
-  static import(filename: string, suffix: string = 'pkl'): Neat {
-    //从磁盘返回一个种群实例。
-    // const buffer = fs.readFileSync(`${filename}.${suffix}`, {
-    //   flag: 'r',
-    // });
+  static import = (filename: string, suffix: string = 'pkl'): Neat => {
     const neat = new Neat();
     // const dneat = JSON.parse(buffer.toString());
 

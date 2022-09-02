@@ -5,6 +5,16 @@ const p5 = new P5(() => { });
 let isFastSpeed = true;
 
 class Bird {
+    y: number = 0;
+    x: number = 0;
+    dead: boolean = false;
+    gravity: number = 0;
+    lift: number = 0;
+    velocity: number = 0;
+    score: number = 0;
+    fitness: number = 0;
+
+
     constructor() {
         this.y = p5.height / 2;
         this.x = 64;
@@ -34,7 +44,7 @@ class Bird {
 
 
 
-    closestP(pipes) {
+    closestP(pipes: Pipe[]) {
 
         // Find the closest pipe
         let closest = null;
@@ -145,7 +155,11 @@ console.log(neat)
 
 
 p5.setup = () => {
-    p5.createCanvas(window.outerWidth, window.outerHeight - 130);
+    // p5.createCanvas(window.outerWidth/1.1, window.outerHeight/1.2);
+    let home: Element | null = document.querySelector("#home");
+    if (home == null) return console.log("找不到指定画布ID");
+    let myCanvas = p5.createCanvas(home.clientWidth, home.clientHeight - 10);
+    myCanvas.parent("home");
     slider = p5.createSlider(1, 10, 1);
     for (let i = 0; i < TOTAL; i++) {
         birds[i] = new Bird();
