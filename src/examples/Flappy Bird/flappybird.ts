@@ -2,7 +2,6 @@ import P5 from 'p5';
 import Neat, { activation, Hyperparameters } from "../../NeatNetwork";
 
 const p5 = new P5(() => { });
-let isFastSpeed = true;
 
 class Bird {
     y: number = 0;
@@ -244,13 +243,14 @@ p5.keyPressed = (e) => {
     //按下p保存
     if (e.keyCode === 80) {
         neat.export(`flappybird-[${Date.now()}]`)
-    } else if (e.keyCode === 79) {
-        //按下o进行加速或者正常速度运行
-        if (isFastSpeed) {
-            isFastSpeed = false;
-        } else {
-            isFastSpeed = true;
-        }
     }
+    // else if (e.keyCode === 79) {
+    //     //按下o进行加速或者正常速度运行
+    //     if (isFastSpeed) {
+    //         isFastSpeed = false;
+    //     } else {
+    //         isFastSpeed = true;
+    //     }
+    // }
 
 }
