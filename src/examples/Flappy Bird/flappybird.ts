@@ -43,10 +43,10 @@ class Bird {
 
 
 
-    closestP(pipes: Pipe[]) {
+    closestP = (pipes: Pipe[]): Pipe => {
 
         // Find the closest pipe
-        let closest = null;
+        let closest = new Pipe();
         let closestD = Infinity;
         for (let i = 0; i < pipes.length; i++) {
             let d = (pipes[i].x + pipes[i].w) - this.x;
@@ -65,6 +65,7 @@ class Bird {
     inputss(pipes) {
         let inputs = [];
         let closest = this.closestP(pipes);
+        //归一化输入
         inputs[0] = p5.map(closest.x, this.x, p5.width, 0, 1);
         // top of closest pipe opening
         inputs[1] = p5.map(closest.top, 0, p5.height, 0, 1);
@@ -74,6 +75,22 @@ class Bird {
         inputs[3] = p5.map(this.y, 0, p5.height, 0, 1);
         // bird's y velocity
         inputs[4] = p5.map(this.velocity, -5, 5, 0, 1);
+
+        // //管道top
+        // inputs[0] = closest.top;
+        // //管道bottom
+        // inputs[1] = closest.bottom;
+        // //鸟x
+        // inputs[2] = this.x;
+        // //鸟y
+        // inputs[3] = this.y;
+        // //重力
+        // inputs[4] = this.velocity;
+        // //屏幕高度
+        // inputs[5] = p5.height;
+        // //屏幕宽度
+        // inputs[6] = p5.width;
+
         return inputs;
     }
 
@@ -92,6 +109,13 @@ class Bird {
 }
 
 class Pipe {
+    spacing: number;
+    top: number;
+    bottom: number;
+    x: number;
+    w: number;
+    speed: number;
+
 
     constructor() {
         this.spacing = 125;
@@ -131,11 +155,11 @@ class Pipe {
     }
 }
 
-const TOTAL = 150;
+const TOTAL = 1000;
 let birds = [];
 let pipes = [];
 let hyperparams = new Hyperparameters();
-hyperparams.default_activation = activation.SIGMOID
+hyperparams.default_activation = activation.SOFTMAX
 let counter = 0;
 let slider;
 let neat = new Neat(5, 1, TOTAL);
@@ -198,7 +222,7 @@ p5.draw = () => {
 
         for (let i = 0; i < TOTAL; i++) {
             const desicions = neat.get_genomes()[i].forward(birds[i].inputss(pipes))
-
+            //跳起来
             if (desicions[0] >= 0.5) {
                 birds[i].up();
             }

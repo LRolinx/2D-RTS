@@ -333,7 +333,8 @@ let psize = 150;//蛇数量 150
 let snakes: any[] = [];
 let hyperparams = new Hyperparameters();
 hyperparams.default_activation = activation.TANH
-let neat = new Neat(8, 1, psize, hyperparams);
+let neat = new Neat(8, 1, psize, hyperparams).import();
+
 
 // let config = new NeatConfig();
 // (config.model = [
@@ -354,7 +355,7 @@ p5.setup = () => {
     p5.strokeWeight(4);
 
 
-    for (let i = 0, len = psize; i < len; i++) {
+    for (let i = 0, len = neat.get_genomes().length; i < len; i++) {
         snakes[i] = new Snake();
     }
 
@@ -367,12 +368,12 @@ p5.setup = () => {
     time = setInterval(() => {
         //每秒扣除蛇生命
 
-        for (let i = 0, len = snakes.length; i < len; i++) {
+        for (let i = 0, len = neat.get_genomes().length; i < len; i++) {
             if (!snakes[i].dead) {
-                snakes[i].blood -= 1;
+                snakes[i].blood -= isFastSpeed ? 5 : 1;
             }
         }
-    }, isFastSpeed ? 100 : 1000);
+    }, 500);
 };
 
 p5.draw = () => {
@@ -380,13 +381,10 @@ p5.draw = () => {
     for (let b = 0, len = isFastSpeed ? 10 : 1; b < len; b++) {
         p5.background(40, 44, 52);
 
-        for (let i = 0, len = snakes.length; i < len; i++) {
-            snakes[i].update();
-        }
+        let finish = true;
+        for (let i = 0, len = neat.get_genomes().length; i < len; i++) {
 
 
-
-        for (let i = 0, len = snakes.length; i < len; i++) {
             const desicions = neat.get_genomes()[i].forward(snakes[i].inputss())
 
             //如果是空的不做操作
@@ -409,17 +407,27 @@ p5.draw = () => {
                 snakes[i].move(3);
                 // }
             }
+
+            //更新蛇的状态以及位置信息
+            snakes[i].update();
         }
 
-        let finish = true;
-        for (let z = 0, len = snakes.length; z < len; z++) {
-            if (!snakes[z].dead) {
+        // for (let i = 0, len = neat.get_genomes().length; i < len; i++) {
+            
+        // }
+
+
+        for (let i = 0, len = neat.get_genomes().length; i < len; i++) {
+            //检查死亡因为有跳出所以不能放到同一个循环里
+            if (!snakes[i].dead) {
                 finish = false;
                 break;
             }
         }
+
+        //全体死亡
         if (finish) {
-            for (let i = 0, len = psize; i < len; i++) {
+            for (let i = 0, len = neat.get_genomes().length; i < len; i++) {
                 neat.get_genomes()[i].set_fitness(snakes[i].score)
                 snakes[i] = new Snake();
             }
@@ -430,9 +438,11 @@ p5.draw = () => {
                 console.log(neat._global_best);
             }
         }
+
+
     }
 
-    for (let i = 0, len = snakes.length; i < len; i++) {
+    for (let i = 0, len = neat.get_genomes().length; i < len; i++) {
         snakes[i].show();
     }
 };
@@ -450,6 +460,9 @@ p5.keyPressed = (e) => {
         } else {
             isFastSpeed = true;
         }
+    } else if (e.keyCode === 76) {
+        //按下l打开训练好的模型
+
     }
 
 }

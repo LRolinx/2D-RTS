@@ -16,6 +16,14 @@
  * @create 2021-12-22 15:10
  */
 
+enum ClassName {
+  Edge,
+  Node,
+  Genome,
+  Specie,
+  Neat
+}
+
 // 计算方法
 /**
  * Set并集
@@ -212,6 +220,48 @@ export function deepcopy(obj: any): any {
   // }
   for (const key in obj) {
     if (Object.prototype === Object.getPrototypeOf(obj[key])) {
+      newobj[key] = deepcopy(obj[key]);
+    } else {
+      newobj[key] = obj[key];
+    }
+  }
+
+  return newobj;
+}
+
+/**
+ * 深拷贝对象数据到指定的类名
+ * @param obj 
+ * @param classname 
+ */
+export function deepcopyobjtoclass(obj: any, classname: ClassName): any {
+  let newobj: any = {};
+  if (obj != undefined) {
+    switch (classname) {
+      case ClassName.Genome:
+        newobj = new Genome(obj._inputs, obj._outputs, obj._default_activation);
+        break;
+      case ClassName.Edge:
+        newobj = new Edge(obj.weight);
+        //删除不必要的
+        delete newobj["enabled"];
+        delete newobj["weight"];
+        break;
+      case ClassName.Node:
+        newobj = new Node(activation.SIGMOID);
+
+        break;
+      case ClassName.Specie:
+        newobj = new Specie(obj._max_fitness_history, new Genome(0, 0, activation.SIGMOID));
+        break;
+    }
+  }
+  // if (!(Object.prototype === Object.getPrototypeOf(obj))) {
+  //   return new Error('传入参数***_object***类型错误');
+  // }
+  for (const key in obj) {
+    if (Object.prototype === Object.getPrototypeOf(obj[key])) {
+      //是对象才进来
       newobj[key] = deepcopy(obj[key]);
     } else {
       newobj[key] = obj[key];
@@ -505,11 +555,11 @@ export class Genome {
     // 初始拓扑，即（无隐藏节点）。 呼吁基因组
     // 创建。
     //最小初始拓扑，无隐藏层
-    for (let n = 0; n < this._max_node; n++) {
+    for (let n = 0, len = this._max_node; n < len; n++) {
       this._nodes[n] = new Node(this._default_activation);
     }
 
-    for (let i = 0; i < this._inputs; i++) {
+    for (let i = 0, len = this._inputs; i < len; i++) {
       for (let j = this._inputs; j < this._unhidden; j++) {
         this.add_edge(i, j, uniform(-1, 1));
       }
@@ -561,12 +611,12 @@ export class Genome {
       [this._inputs, this._unhidden],
     );
 
-    for (const j of ordered_nodes) {
+    for (let j = 0, len = ordered_nodes.length; j < len; j++) {
       let ax = 0;
-      for (const i of _from[j]) {
-        ax += this._edges[`${i},${j}`].weight * this._nodes[Number(i)].output;
+      for (const i of _from[ordered_nodes[j]]) {
+        ax += this._edges[`${i},${ordered_nodes[j]}`].weight * this._nodes[Number(i)].output;
       }
-      const node: Node = this._nodes[j];
+      const node: Node = this._nodes[ordered_nodes[j]];
       node.output = Number(node.activation(ax + node.bias));
     }
 
@@ -634,10 +684,10 @@ export class Genome {
   add_edge(i: number, j: number, weight: number) {
     //在现有节点之间添加新连接。
     if (`${i},${j}` in this._edges) {
-      console.log("启动新连接", this._edges, [`${i},${j}`], weight)
+      // console.log("启动新连接", this._edges, [`${i},${j}`], weight)
       this._edges[`${i},${j}`].enabled = true;
     } else {
-      console.log("创建新连接", this._edges, [`${i},${j}`], weight)
+      // console.log("创建新连接", this._edges, [`${i},${j}`], weight)
       this._edges[`${i},${j}`] = new Edge(weight);
     }
   }
@@ -829,9 +879,11 @@ export class Specie {
     let child: Genome = new Genome(0, 0, activation.SIGMOID);
 
     if (cho == 'asexual' || this._members.length == 1) {
+      //变异
       child = copy(choice(this._members));
       child.mutate(mutation_probabilities);
     } else if (cho == 'sexual') {
+      //交叉
       const dam = sample(this._members, 2);
       child = genomic_crossover(dam[0], dam[1]);
     }
@@ -892,21 +944,45 @@ export class Specie {
 export default class Neat {
   //通过进化学习的“大脑”的基础类
   //  的基因组群体。
+  /**
+   * 输入数量
+   */
   _inputs: number;
+  /**
+   * 输出数量
+   */
   _outputs: number;
+  /**
+   * 激活函数名字
+   */
+  _activationName: string;
+  /**
+   * 
+   */
   _species: Specie[];
+  /**
+   * 所有的基因组
+   */
   _genomes: Genome[];
+  /**
+   * 
+   */
   _population: number;
+  /**
+   * 超参数
+   */
   _hyperparams: Hyperparameters;
+  /**
+   * 
+   */
   _generation: number;
   /**
    * 种族代数
    */
   _current_species: number;
   /**
-   * 学习次数
+   * 历史最强基因
    */
-  _current_genome: number;
   _global_best: Genome;
 
   /**
@@ -919,22 +995,23 @@ export default class Neat {
   constructor(
     inputs = 0,
     outputs = 0,
-    population = 100,
+    population = 0,
     hyperparams = new Hyperparameters(),
   ) {
     this._inputs = inputs;
     this._outputs = outputs;
+    this._activationName = hyperparams.default_activation.name
 
     this._species = [];
     this._genomes = [];
     this._population = population;
 
-    //超参数
     this._hyperparams = hyperparams;
 
     this._generation = 0;
+    //当前训练的种群
     this._current_species = 0;
-    this._current_genome = 0;
+
     this._global_best = new Genome(this._inputs, this._outputs, hyperparams.default_activation)
 
     this.generate();
@@ -953,7 +1030,7 @@ export default class Neat {
       this.classify_genome(g);
     }
     //设置初始最佳基因组
-    this._global_best = this._species[0]._members[0];
+    this._global_best = new Genome(0, 0, this._hyperparams.default_activation);
     //更新所有的基因组
     this.update_genomes()
   }
@@ -999,7 +1076,8 @@ export default class Neat {
       top_performers.filter((x) => x._fitness).length == 0
         ? top_performers[0]
         : top_performers.filter((x) => x._fitness)[0];
-    if (current_top._fitness > this._global_best._fitness) {
+
+    if (current_top != undefined && current_top._fitness > this._global_best._fitness) {
       this._global_best = current_top.clone();
     }
   }
@@ -1096,6 +1174,7 @@ export default class Neat {
    * @returns 
    */
   should_evolve = (): boolean => {
+    if (this._population === 0 || this._genomes.length === 0 || this._species.length === 0) return false;
     // 基于最大适应度和代数。
     this.update_fittest();
     //更新所有个基因
@@ -1110,40 +1189,15 @@ export default class Neat {
    * 在每次评估个体基因组后调用
    */
   next_iteration = () => {
-    // 进步训练。
-    const s = this._species[this._current_species];
-    if (this._current_genome < s._members.length - 1) {
-      //学习次数
-      this._current_genome += 1;
+    //种族进化到下一代
+    if (this._current_species < this._species.length - 1) {
+      this._current_species += 1;
     } else {
-      //种族进化到下一代
-      if (this._current_species < this._species.length - 1) {
-        this._current_species += 1;
-        this._current_genome = 0;
-      } else {
-        //基因进化到下一代
-        this.evolve();
-        this._current_species = 0;
-        this._current_genome = 0;
-      }
+      //基因进化到下一代
+      this.evolve();
+      this._current_species = 0;
     }
   }
-
-  // evaluate_parallel(
-  //   // evaluator,
-  //   args: [string, number],
-  //   kwargs: { [key: string]: number },
-  // ) {
-  //   //并行评估 ***********暂时用不到
-  //   //*args元组 **kwargs字典
-  //   //在单独的过程中评估整个群体
-  //   // 进行训练。 评估器功能必须采用基因组
-  //   // 作为它的第一个参数并返回一个数字适应度分数。
-  //   // 任何传递给评估器的全局状态都会被复制，并且不会
-  //   // 在父进程中进行修改。
-  //   // const max_proc = max(mp.cpu_count() - 1, 1)
-  //   // const pool = mp.Pool(processes = max_proc)
-  // }
 
   /**
    * 返回具有最高全局适应度分数的基因组。
@@ -1166,28 +1220,11 @@ export default class Neat {
   }
 
   /**
-   * 获取当前基因组进行评估。
-   * @returns 
-   */
-  get_current = (): Genome => {
-    const s: Specie = this._species[this._current_species];
-    return s._members[this._current_genome];
-  }
-
-  /**
    * 获取正在评估的当前物种的索引。
    * @returns 
    */
   get_current_species = (): number => {
     return this._current_species;
-  }
-
-  /**
-   * 获取当前正在评估的基因组的索引。
-   * @returns 
-   */
-  get_current_genome = (): number => {
-    return this._current_genome;
   }
 
   /**
@@ -1235,28 +1272,73 @@ export default class Neat {
 
   /**
    * 导入一个训练模型
-   * @param filename 文件名
-   * @param suffix 后缀名
-   * @returns 
    */
-  static import = (filename: string, suffix: string = 'pkl'): Neat => {
-    const neat = new Neat();
-    // const dneat = JSON.parse(buffer.toString());
+  import = (): Neat => {
+    const hy = new Hyperparameters();
+    const input = document.createElement("input");
+    input.type = "button";
+    input.value = "点我导入训练模型"
+    document.body.appendChild(input);
+    const s = document.createElement("input");
+    s.type = "file";
+    s.hidden = true;
+    input.appendChild(s);
+    input.onclick = () => s.click();
+    s.onchange = (e) => {
+      const reader = new FileReader();
+      const file = e.target.files[0];
+      reader.readAsText(file);
+      reader.onload = () => {
+        const oldNeat: Neat = JSON.parse(reader.result)
+        console.log(oldNeat)
+        hy.default_activation = activation[oldNeat._activationName];
+        this._hyperparams = hy;
 
-    // for (const i in dneat) {
-    //   neat[i] = dneat[i];
-    // }
-    // return neat;
+        this._inputs = oldNeat._inputs;
+        this._outputs = oldNeat._outputs;
+        this._population = oldNeat._population;
+        this._generation = oldNeat._generation;
+        this._current_species = oldNeat._current_species;
+        this._activationName = oldNeat._activationName;
 
-    // if (JSON.stringify(t[0]) !== JSON.stringify(this.exportModel)) throw "Model Error";
-    // console.log("Importing " + t[1].length + " creature(s)");
-    // for (let e = 0, s = t[1].length; e < s; e++) {
-    //   let s = new Genome(this.model);
-    //   s.setFlattenedGenes(t[1][e]),
-    //     this.genomes.push(s),
-    //     this.populationSize++
-    // }
+        //清空数据再写入防止报错
+        this._genomes = [];
+        this._species = [];
 
-    return neat;
+
+        //写入基因组
+        this._global_best = deepcopyobjtoclass(oldNeat._global_best, ClassName.Genome);
+        this._global_best._default_activation = hy.default_activation;
+        for (let n = 0, len = Object.keys(this._global_best._nodes).length; n < len; n++) {
+          this._global_best._nodes[n] = deepcopyobjtoclass(oldNeat._global_best._nodes[n], ClassName.Node);
+          this._global_best._nodes[n].activation = hy.default_activation;
+        }
+        this._global_best._edges = deepcopyobjtoclass(oldNeat._global_best._edges, ClassName.Edge);
+
+        //写入种群
+        for (let i = 0, len = oldNeat._species.length; i < len; i++) {
+          this._species.push(deepcopyobjtoclass(oldNeat._species[i], ClassName.Specie));
+
+          for (let g = 0, len = this._species[i]._members.length; g < len; g++) {
+            this._species[i]._members[g] = deepcopyobjtoclass(this._species[i]._members[g], ClassName.Genome);
+            this._species[i]._members[g]._default_activation = hy.default_activation;
+
+            for (let n = 0, len = Object.keys(this._global_best._nodes).length; n < len; n++) {
+              this._species[i]._members[g]._nodes[n] = deepcopyobjtoclass(this._species[i]._members[g]._nodes[n], ClassName.Node);
+              this._species[i]._members[g]._nodes[n].activation = hy.default_activation;
+            }
+
+            this._species[i]._members[g]._edges = deepcopyobjtoclass(this._species[i]._members[g]._edges, ClassName.Edge);
+          }
+
+        }
+
+        // 更新所有的基因组
+        this.update_genomes();
+
+        s.value = "";
+      }
+    }
+    return this;
   }
 }
