@@ -1,3 +1,10 @@
+# 全彩视觉AI
+
+视觉格式
+单色素坐标信息 xy = 0000,0000 = 00000000
+单色素颜色 RGB = 000,000,000 = 000000000
+
+
 # Vue 3 + TypeScript + Vite
 
 This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
