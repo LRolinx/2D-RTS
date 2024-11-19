@@ -55,13 +55,13 @@ export class RtsWorker {
     this.p.fill(89, 115, 255)
     this.p.ellipse(this.x, this.y, this.env.gridSize, this.env.gridSize)
 
-    this.p.textSize(8)
+    // this.p.textSize(8)
     //   this.p.text('移动中', this.x-this.env.gridSize, this.y + this.env.gridSize)
+    // 绘制血量
     this.p.fill(234, 237, 255, 128)
-    //   this.p.text('RTS', this.p.width / 2 + 60, p5.height / 2)
     this.p.rect(this.x - (this.env.gridSize * 2) / 2, this.y + this.env.gridSize, this.env.gridSize * 2, 5)
     this.p.fill(89, 115, 255)
-    this.p.rect(this.x - (this.env.gridSize * 2) / 2, this.y + this.env.gridSize, ((this.env.gridSize * 2) / 100) * this.blood, 5)
+    this.p.rect(this.x - (this.env.gridSize * 2) / 2, this.y + this.env.gridSize, ((this.env.gridSize * 2) / this.maxBlood) * this.blood, 5)
 
     // 绘制路线以及移动
     if (this.path.length === 0 || this.currentIndex >= this.path.length) return

@@ -20,7 +20,7 @@ const initLoading = () => {
 
 p5.setup = () => {
   // 禁用右键菜单
-  document.oncontextmenu = function (event) {
+  document.oncontextmenu = function (event: MouseEvent) {
     event.preventDefault()
     p5.mouseClicked(event)
   }
@@ -60,8 +60,8 @@ p5.draw = () => {
   }
 }
 
-p5.mouseClicked = (e) => {
-  console.log(e)
+p5.mouseClicked = (e: MouseEvent) => {
+  //   console.log(e)
   if (env == void 0) return
 
   if (env.select != void 0 && env.select.object != void 0 && e.button == 2) {

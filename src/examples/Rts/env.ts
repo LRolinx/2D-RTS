@@ -32,6 +32,7 @@ export class Env {
     this.unit.push(new RtsHome(p, this))
     // 创建工人
     this.unit.push(new RtsWorker(p, this))
+    this.unit.push(new RtsWorker(p, this))
   }
 
   // 创建地图
