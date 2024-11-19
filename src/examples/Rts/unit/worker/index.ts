@@ -32,8 +32,8 @@ export class RtsWorker {
     if (this.path.length === 0 || this.currentIndex >= this.path.length) return
 
     const target = this.path[this.currentIndex]
-    const dx = target.x * this.env.gridSize - this.x
-    const dy = target.y * this.env.gridSize - this.y
+    const dx = target.x * this.env.gridSize - this.x + this.env.gridSize / 2
+    const dy = target.y * this.env.gridSize - this.y + this.env.gridSize / 2
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist < this.moveSpeed) {
@@ -50,10 +50,15 @@ export class RtsWorker {
     this.p.ellipse(this.x, this.y, this.env.gridSize, this.env.gridSize)
 
     if (this.path.length === 0 || this.currentIndex >= this.path.length) return
-	this.p.stroke(89, 115, 255)
-    this.p.line(this.x, this.y, this.path[this.currentIndex].x * this.env.gridSize, this.path[this.currentIndex].y * this.env.gridSize)
-    for (let i = this.currentIndex+1; i < this.path.length; i++) {
-      this.p.line(this.path[i - 1].x * this.env.gridSize, this.path[i - 1].y * this.env.gridSize, this.path[i].x * this.env.gridSize, this.path[i].y * this.env.gridSize)
+    this.p.stroke(89, 115, 255)
+    this.p.line(this.x, this.y, this.path[this.currentIndex].x * this.env.gridSize + this.env.gridSize / 2, this.path[this.currentIndex].y * this.env.gridSize + this.env.gridSize / 2)
+    for (let i = this.currentIndex + 1; i < this.path.length; i++) {
+      this.p.line(
+        this.path[i - 1].x * this.env.gridSize + this.env.gridSize / 2,
+        this.path[i - 1].y * this.env.gridSize + this.env.gridSize / 2,
+        this.path[i].x * this.env.gridSize + this.env.gridSize / 2,
+        this.path[i].y * this.env.gridSize + this.env.gridSize / 2
+      )
     }
   }
 }
