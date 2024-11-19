@@ -55,12 +55,26 @@ p5.draw = () => {
 }
 
 p5.mouseClicked = (e) => {
-//   console.log(e)
+  //   console.log(e)
   if (env == void 0) return
-  env.select = new Select(p5.mouseX, p5.mouseY, env?.unit[1])
+
   //遍历对象看有没有对象坐标位置
-  // for(let i = 0 ; i < env.unit.length;i++) {
-  //     env.unit
-  // }
-  env.select.object.setPath(p5.mouseX, p5.mouseY)
+  for (let i = 0; i < env.unit.length; i++) {
+    if (
+      p5.mouseX >= env.unit[i].x - env.gridSize / 2 &&
+      p5.mouseY >= env.unit[i].y - env.gridSize / 2 &&
+      p5.mouseX <= env.unit[i].x + env.gridSize / 2 &&
+      p5.mouseY <= env.unit[i].y + env.gridSize / 2
+    ) {
+      env.select = new Select(env.unit[i].x, env.unit[i].y, env.unit[i])
+      return
+    }
+  }
+  if (p5.mouseX <= p5.height && p5.mouseY <= p5.height) {
+    // 找不到对象则选中地图格子
+    env.select = new Select(p5.floor(p5.mouseX / env.gridSize) * env.gridSize, p5.floor(p5.mouseY / env.gridSize) * env.gridSize)
+    //   env.select.object.setPath(p5.mouseX, p5.mouseY)
+  } else {
+    env.select = undefined
+  }
 }

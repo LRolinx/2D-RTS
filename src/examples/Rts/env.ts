@@ -141,11 +141,20 @@ export class Env {
         // 绘制对象属性
         this.p?.textSize(18)
         this.p?.fill(255, 255, 255)
-        this.p?.text('属性', this.p.height+10, 18)
+        this.p?.text('单位属性', this.p.height+10, 18)
         this.p?.textSize(12)
         this.p?.text(`最大血量:${this.select.object.maxBlood}`, this.p.height+10, 38)
         this.p?.text(`当前血量:${this.select.object.blood}`, this.p.height+10, 58)
-      }
+      }else {
+		// 地图属性
+		// 绘制对象属性
+        this.p?.textSize(18)
+        this.p?.fill(255, 255, 255)
+        this.p?.text('地图属性', this.p.height+10, 18)
+        // this.p?.textSize(12)
+        // this.p?.text(`最大血量:${this.select.object.maxBlood}`, this.p.height+10, 38)
+        // this.p?.text(`当前血量:${this.select.object.blood}`, this.p.height+10, 58)
+	  }
 
       // 绘制选中框
       this.p?.stroke(0, 255, 0, this.select.op)
