@@ -1,7 +1,20 @@
 import p5 from 'p5'
 import { RtsHome } from './unit/home'
-import { MapNode } from './pathfinding'
 import { RtsWorker } from './unit/worker'
+
+export class Select {
+  x: number = 0
+  y: number = 0
+  object: any = undefined
+  op = 255
+  hideOp = true
+
+  constructor(x: number, y: number, object?: any) {
+    this.x = x
+    this.y = y
+    this.object = object
+  }
+}
 
 /// 环境
 export class Env {
@@ -9,6 +22,7 @@ export class Env {
   gridSize: number = 18
   map: number[][] = []
   unit: any[] = []
+  select?: Select = undefined
 
   constructor(p: p5) {
     this.p = p
@@ -92,23 +106,57 @@ export class Env {
         }
       }
     }
-
   }
 
-  // 运行
-  run = () => {
+  // 绘制
+  draw = () => {
+    // 绘制地图
+    this.drawMap()
+
+    // 绘制对象
     this.unit.forEach((x) => {
       x.draw()
-
-	  if(x.move != void 0) {
-		// 单位移动
-		x.move()
-	  }
     })
 
-	// for(let i = 0 ;i < this.unit.length;i++) {
-	// 	const _unit = this.unit[i]
-	// 	_unit.draw()
-	// }
+    // 绘制选择
+    if (this.select != void 0) {
+      if (this.select.hideOp) {
+        this.select.op -= 15
+        if (this.select.op <= 0) {
+          this.select.hideOp = false
+        }
+      } else {
+        this.select.op += 15
+        if (this.select.op >= 255) {
+          this.select.hideOp = true
+        }
+      }
+      //   this.select.hideOp = !this.select.hideOp
+
+      if (this.select.object != void 0) {
+        // 如果是对象则锁定对象
+        this.select.x = this.select.object.x - this.gridSize / 2
+        this.select.y = this.select.object.y - this.gridSize / 2
+
+        // 绘制对象属性
+        this.p?.textSize(18)
+        this.p?.fill(255, 255, 255)
+        this.p?.text('属性', this.p.height+10, 18)
+        this.p?.textSize(12)
+        this.p?.text(`最大血量:${this.select.object.maxBlood}`, this.p.height+10, 38)
+        this.p?.text(`当前血量:${this.select.object.blood}`, this.p.height+10, 58)
+      }
+
+      // 绘制选中框
+      this.p?.stroke(0, 255, 0, this.select.op)
+      this.p?.line(this.select.x, this.select.y, this.select.x + this.gridSize / 3, this.select.y)
+      this.p?.line(this.select.x, this.select.y, this.select.x, this.select.y + this.gridSize / 3)
+      this.p?.line(this.select.x + this.gridSize, this.select.y, this.select.x + this.gridSize - this.gridSize / 3, this.select.y)
+      this.p?.line(this.select.x + this.gridSize, this.select.y, this.select.x + this.gridSize, this.select.y + this.gridSize / 3)
+      this.p?.line(this.select.x, this.select.y + this.gridSize, this.select.x, this.select.y + this.gridSize - this.gridSize / 3)
+      this.p?.line(this.select.x, this.select.y + this.gridSize, this.select.x + this.gridSize / 3, this.select.y + this.gridSize)
+      this.p?.line(this.select.x + this.gridSize, this.select.y + this.gridSize, this.select.x + this.gridSize, this.select.y + this.gridSize - this.gridSize / 3)
+      this.p?.line(this.select.x + this.gridSize, this.select.y + this.gridSize, this.select.x + this.gridSize - this.gridSize / 3, this.select.y + this.gridSize)
+    }
   }
 }

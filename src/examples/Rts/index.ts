@@ -1,5 +1,5 @@
 import P5 from 'p5'
-import { Env } from './env'
+import { Env, Select } from './env'
 const p5 = new P5(() => {})
 let env: Env | undefined = undefined
 let pageName = 'main'
@@ -48,16 +48,19 @@ p5.draw = () => {
     case 'main':
       p5.background(30, 30, 30)
       if (env != void 0) {
-        env.drawMap()
-
-		//环境运行
-		env.run()
+        env.draw()
       }
       break
   }
 }
 
-p5.mouseClicked = () => {
-	// console.log("按下")
-	env?.unit[1].setPath(p5.mouseX,p5.mouseY)
+p5.mouseClicked = (e) => {
+//   console.log(e)
+  if (env == void 0) return
+  env.select = new Select(p5.mouseX, p5.mouseY, env?.unit[1])
+  //遍历对象看有没有对象坐标位置
+  // for(let i = 0 ; i < env.unit.length;i++) {
+  //     env.unit
+  // }
+  env.select.object.setPath(p5.mouseX, p5.mouseY)
 }

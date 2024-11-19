@@ -6,11 +6,13 @@ export class RtsWorker {
   p: p5
   env: Env
   moveSpeed = 2
-  blood = 100
+  maxBlood = 100
+  blood = 50
   path: MapNode[] = []
   currentIndex = 0
   x = 150
   y = 150
+  isMove = false
 
   constructor(p: p5, env: Env) {
     this.p = p
@@ -29,26 +31,39 @@ export class RtsWorker {
   }
 
   move() {
-    if (this.path.length === 0 || this.currentIndex >= this.path.length) return
-
-    const target = this.path[this.currentIndex]
-    const dx = target.x * this.env.gridSize - this.x + this.env.gridSize / 2
-    const dy = target.y * this.env.gridSize - this.y + this.env.gridSize / 2
-    const dist = Math.sqrt(dx * dx + dy * dy)
-
-    if (dist < this.moveSpeed) {
-      this.currentIndex++
+    if (this.path.length === 0 || this.currentIndex >= this.path.length) {
+      this.isMove = false
     } else {
-      const angle = Math.atan2(dy, dx)
-      this.x += this.moveSpeed * Math.cos(angle)
-      this.y += this.moveSpeed * Math.sin(angle)
+      this.isMove = true
+      const target = this.path[this.currentIndex]
+      const dx = target.x * this.env.gridSize - this.x + this.env.gridSize / 2
+      const dy = target.y * this.env.gridSize - this.y + this.env.gridSize / 2
+      const dist = Math.sqrt(dx * dx + dy * dy)
+
+      if (dist < this.moveSpeed) {
+        this.currentIndex++
+      } else {
+        const angle = Math.atan2(dy, dx)
+        this.x += this.moveSpeed * Math.cos(angle)
+        this.y += this.moveSpeed * Math.sin(angle)
+      }
     }
   }
 
   draw() {
-    this.p.fill(255, 0, 0)
+    // 绘制本体
+    this.p.fill(89, 115, 255)
     this.p.ellipse(this.x, this.y, this.env.gridSize, this.env.gridSize)
 
+    this.p.textSize(8)
+    //   this.p.text('移动中', this.x-this.env.gridSize, this.y + this.env.gridSize)
+    this.p.fill(234, 237, 255, 128)
+    //   this.p.text('RTS', this.p.width / 2 + 60, p5.height / 2)
+    this.p.rect(this.x - (this.env.gridSize * 2) / 2, this.y + this.env.gridSize, this.env.gridSize * 2, 5)
+    this.p.fill(89, 115, 255)
+    this.p.rect(this.x - (this.env.gridSize * 2) / 2, this.y + this.env.gridSize, ((this.env.gridSize * 2) / 100) * this.blood, 5)
+
+    // 绘制路线以及移动
     if (this.path.length === 0 || this.currentIndex >= this.path.length) return
     this.p.stroke(89, 115, 255)
     this.p.line(this.x, this.y, this.path[this.currentIndex].x * this.env.gridSize + this.env.gridSize / 2, this.path[this.currentIndex].y * this.env.gridSize + this.env.gridSize / 2)
@@ -60,5 +75,7 @@ export class RtsWorker {
         this.path[i].y * this.env.gridSize + this.env.gridSize / 2
       )
     }
+
+    this.move()
   }
 }
