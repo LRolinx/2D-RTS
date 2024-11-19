@@ -2,9 +2,10 @@ import p5 from 'p5'
 import { Env } from '../../env'
 /// 家(基地)
 export class RtsHome {
-  p: p5 | undefined = undefined
-  x: number = 0
-  y: number = 0
+  p: p5
+  env: Env
+  x: number = 522
+  y: number = 504
   width: number = 2
   height: number = 20
   // 血量
@@ -12,8 +13,12 @@ export class RtsHome {
 
   constructor(p: p5, env: Env) {
     this.p = p
-
+    this.env = env
   }
 
-  draw() {}
+  draw() {
+    // 绘制本体
+    this.p.fill(89, 115, 255)
+    this.p.square(this.x, this.y, this.env.gridSize)
+  }
 }

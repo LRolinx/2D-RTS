@@ -19,6 +19,12 @@ const initLoading = () => {
 }
 
 p5.setup = () => {
+  // 禁用右键菜单
+  document.oncontextmenu = function (event) {
+    event.preventDefault()
+    p5.mouseClicked(event)
+  }
+
   document.body.style.background = 'rgb(19, 21, 32)'
   let homeElement: Element | null = document.querySelector('#home')
   if (homeElement == null) return console.log('找不到指定画布ID')
@@ -55,8 +61,16 @@ p5.draw = () => {
 }
 
 p5.mouseClicked = (e) => {
-  //   console.log(e)
+  console.log(e)
   if (env == void 0) return
+
+  if (env.select != void 0 && env.select.object != void 0 && e.button == 2) {
+    // 点击右键 如果选中单位，则设置移动
+    if (env.select.object.setPath != void 0) {
+      env.select.object.setPath(p5.mouseX, p5.mouseY)
+    }
+    return
+  }
 
   //遍历对象看有没有对象坐标位置
   for (let i = 0; i < env.unit.length; i++) {
@@ -73,7 +87,6 @@ p5.mouseClicked = (e) => {
   if (p5.mouseX <= p5.height && p5.mouseY <= p5.height) {
     // 找不到对象则选中地图格子
     env.select = new Select(p5.floor(p5.mouseX / env.gridSize) * env.gridSize, p5.floor(p5.mouseY / env.gridSize) * env.gridSize)
-    //   env.select.object.setPath(p5.mouseX, p5.mouseY)
   } else {
     env.select = undefined
   }
