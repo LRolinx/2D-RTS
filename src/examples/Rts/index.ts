@@ -5,6 +5,8 @@ let env: Env | undefined = undefined
 let pageName = 'main'
 let initSchedule = 0
 
+
+
 // 绘制初始化加载画面
 const initLoading = () => {
   p5.background(30, 30, 30)
@@ -53,6 +55,7 @@ p5.draw = () => {
       break
     case 'main':
       p5.background(30, 30, 30)
+
       if (env != void 0) {
         env.draw()
       }
@@ -74,12 +77,7 @@ p5.mouseClicked = (e: MouseEvent) => {
 
   //遍历对象看有没有对象坐标位置
   for (let i = 0; i < env.unit.length; i++) {
-    if (
-      p5.mouseX >= env.unit[i].x &&
-      p5.mouseY >= env.unit[i].y &&
-      p5.mouseX <= env.unit[i].x + env.gridSize &&
-      p5.mouseY <= env.unit[i].y + env.gridSize
-    ) {
+    if (p5.mouseX >= env.unit[i].x && p5.mouseY >= env.unit[i].y && p5.mouseX <= env.unit[i].x + env.gridSize && p5.mouseY <= env.unit[i].y + env.gridSize) {
       env.select = new Select(env.unit[i].x, env.unit[i].y, env.unit[i])
       return
     }

@@ -3,6 +3,7 @@ import { RtsHome } from './unit/home'
 import { RtsWorker } from './unit/worker'
 import { Water } from './tile/water'
 import { AirBase } from './unit/air_base'
+import { TestTank } from './unit/test_tank'
 
 export class Select {
   x: number = 0
@@ -33,8 +34,8 @@ export class Env {
     // 创建家
     this.unit.push(new RtsHome(p, this))
     // 创建工人
-    this.unit.push(new RtsWorker(p, this))
-    this.unit.push(new RtsWorker(p, this))
+    this.unit.push(new TestTank(p, this))
+    // this.unit.push(new RtsWorker(p, this))
   }
 
   // 创建地图
@@ -117,7 +118,7 @@ export class Env {
     this.drawMap()
 
     new Water(this.p, this, 180, 180).draw()
-    new AirBase(this.p, this, 180, 180).draw()
+    // new AirBase(this.p, this, 180, 180).draw()
 
     // 绘制对象
     this.unit.forEach((x) => {
