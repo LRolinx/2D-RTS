@@ -1,6 +1,7 @@
 import p5 from 'p5'
 import { RtsHome } from './unit/home'
 import { RtsWorker } from './unit/worker'
+import { Water } from './tile/water'
 
 export class Select {
   x: number = 0
@@ -114,13 +115,15 @@ export class Env {
     // 绘制地图
     this.drawMap()
 
+    new Water(this.p, this, 180, 180).draw()
+
     // 绘制对象
     this.unit.forEach((x) => {
       x.draw()
     })
 
     // 绘制选择
-	this.p?.stroke(0, 0, 0)
+    this.p?.stroke(0, 0, 0)
     if (this.select != void 0) {
       if (this.select.hideOp) {
         this.select.op -= 15
@@ -143,20 +146,20 @@ export class Env {
         // 绘制对象属性
         this.p?.textSize(18)
         this.p?.fill(255, 255, 255)
-        this.p?.text('单位属性', this.p.height+10, 18)
+        this.p?.text('单位属性', this.p.height + 10, 18)
         this.p?.textSize(12)
-        this.p?.text(`最大血量:${this.select.object.maxBlood}`, this.p.height+10, 38)
-        this.p?.text(`当前血量:${this.select.object.blood}`, this.p.height+10, 58)
-      }else {
-		// 地图属性
-		// 绘制对象属性
+        this.p?.text(`最大血量:${this.select.object.maxBlood}`, this.p.height + 10, 38)
+        this.p?.text(`当前血量:${this.select.object.blood}`, this.p.height + 10, 58)
+      } else {
+        // 地图属性
+        // 绘制对象属性
         this.p?.textSize(18)
         this.p?.fill(255, 255, 255)
-        this.p?.text('地图属性', this.p.height+10, 18)
+        this.p?.text('地图属性', this.p.height + 10, 18)
         // this.p?.textSize(12)
         // this.p?.text(`最大血量:${this.select.object.maxBlood}`, this.p.height+10, 38)
         // this.p?.text(`当前血量:${this.select.object.blood}`, this.p.height+10, 58)
-	  }
+      }
 
       // 绘制选中框
       this.p?.stroke(0, 255, 0, this.select.op)
