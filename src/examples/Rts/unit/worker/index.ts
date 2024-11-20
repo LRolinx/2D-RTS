@@ -36,8 +36,8 @@ export class RtsWorker {
     } else {
       this.isMove = true
       const target = this.path[this.currentIndex]
-      const dx = target.x * this.env.gridSize - this.x + this.env.gridSize / 2
-      const dy = target.y * this.env.gridSize - this.y + this.env.gridSize / 2
+      const dx = target.x * this.env.gridSize - this.x
+      const dy = target.y * this.env.gridSize - this.y
       const dist = Math.sqrt(dx * dx + dy * dy)
 
       if (dist < this.moveSpeed) {
@@ -52,21 +52,27 @@ export class RtsWorker {
 
   draw() {
     // 绘制本体
+	this.p.stroke(0, 0, 0)
     this.p.fill(89, 115, 255)
-    this.p.ellipse(this.x, this.y, this.env.gridSize, this.env.gridSize)
+    this.p.ellipse(this.x + this.env.gridSize / 2, this.y + this.env.gridSize / 2, this.env.gridSize, this.env.gridSize)
 
     // this.p.textSize(8)
     //   this.p.text('移动中', this.x-this.env.gridSize, this.y + this.env.gridSize)
     // 绘制血量
     this.p.fill(234, 237, 255, 128)
-    this.p.rect(this.x - (this.env.gridSize * 2) / 2, this.y + this.env.gridSize, this.env.gridSize * 2, 5)
+    this.p.rect(this.x - this.env.gridSize / 2, this.y + this.env.gridSize * 1.2, this.env.gridSize * 2, 5)
     this.p.fill(89, 115, 255)
-    this.p.rect(this.x - (this.env.gridSize * 2) / 2, this.y + this.env.gridSize, ((this.env.gridSize * 2) / this.maxBlood) * this.blood, 5)
+    this.p.rect(this.x - this.env.gridSize / 2, this.y + this.env.gridSize * 1.2, ((this.env.gridSize * 2) / this.maxBlood) * this.blood, 5)
 
     // 绘制路线以及移动
     if (this.path.length === 0 || this.currentIndex >= this.path.length) return
     this.p.stroke(89, 115, 255)
-    this.p.line(this.x, this.y, this.path[this.currentIndex].x * this.env.gridSize + this.env.gridSize / 2, this.path[this.currentIndex].y * this.env.gridSize + this.env.gridSize / 2)
+    this.p.line(
+      this.x + this.env.gridSize / 2,
+      this.y + this.env.gridSize / 2,
+      this.path[this.currentIndex].x * this.env.gridSize + this.env.gridSize / 2,
+      this.path[this.currentIndex].y * this.env.gridSize + this.env.gridSize / 2
+    )
     for (let i = this.currentIndex + 1; i < this.path.length; i++) {
       this.p.line(
         this.path[i - 1].x * this.env.gridSize + this.env.gridSize / 2,

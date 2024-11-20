@@ -120,6 +120,7 @@ export class Env {
     })
 
     // 绘制选择
+	this.p?.stroke(0, 0, 0)
     if (this.select != void 0) {
       if (this.select.hideOp) {
         this.select.op -= 15
@@ -136,8 +137,8 @@ export class Env {
 
       if (this.select.object != void 0) {
         // 如果是对象则锁定对象
-        this.select.x = this.select.object.x - this.gridSize / 2
-        this.select.y = this.select.object.y - this.gridSize / 2
+        this.select.x = this.select.object.x
+        this.select.y = this.select.object.y
 
         // 绘制对象属性
         this.p?.textSize(18)

@@ -75,10 +75,10 @@ p5.mouseClicked = (e: MouseEvent) => {
   //遍历对象看有没有对象坐标位置
   for (let i = 0; i < env.unit.length; i++) {
     if (
-      p5.mouseX >= env.unit[i].x - env.gridSize / 2 &&
-      p5.mouseY >= env.unit[i].y - env.gridSize / 2 &&
-      p5.mouseX <= env.unit[i].x + env.gridSize / 2 &&
-      p5.mouseY <= env.unit[i].y + env.gridSize / 2
+      p5.mouseX >= env.unit[i].x &&
+      p5.mouseY >= env.unit[i].y &&
+      p5.mouseX <= env.unit[i].x + env.gridSize &&
+      p5.mouseY <= env.unit[i].y + env.gridSize
     ) {
       env.select = new Select(env.unit[i].x, env.unit[i].y, env.unit[i])
       return
