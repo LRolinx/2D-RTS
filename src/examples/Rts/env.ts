@@ -2,6 +2,7 @@ import p5 from 'p5'
 import { RtsHome } from './unit/home'
 import { RtsWorker } from './unit/worker'
 import { Water } from './tile/water'
+import { AirBase } from './unit/air_base'
 
 export class Select {
   x: number = 0
@@ -116,6 +117,7 @@ export class Env {
     this.drawMap()
 
     new Water(this.p, this, 180, 180).draw()
+    new AirBase(this.p, this, 180, 180).draw()
 
     // 绘制对象
     this.unit.forEach((x) => {
