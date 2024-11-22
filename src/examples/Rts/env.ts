@@ -1,8 +1,7 @@
 import p5 from 'p5'
+import Matter from 'matter-js'
 import { RtsHome } from './unit/home'
-import { RtsWorker } from './unit/worker'
 import { Water } from './tile/water'
-import { AirBase } from './unit/air_base'
 import { TestTank } from './unit/test_tank'
 
 export class Select {
@@ -22,6 +21,7 @@ export class Select {
 /// 环境
 export class Env {
   p: p5 | undefined = undefined
+
   gridSize: number = 18
   map: number[][] = []
   unit: any[] = []
@@ -36,6 +36,62 @@ export class Env {
     // 创建工人
     this.unit.push(new TestTank(p, this))
     // this.unit.push(new RtsWorker(p, this))
+
+    // const Engine = Matter.Engine,
+    //   Render = Matter.Render,
+    //   Runner = Matter.Runner,
+    //   Bodies = Matter.Bodies,
+    //   Composite = Matter.Composite
+
+    // // 创建一个物理引擎
+    // const engine = Engine.create()
+
+    // // 创建一个渲染器
+    // const render = Render.create({
+    //   element: document.body,
+    //   engine: engine,
+    //   options: {
+    //     pixelRatio: 1, // 设置像素比
+    //     background: '#fafafa', // 全局渲染模式时背景色
+    //     wireframeBackground: '#222', // 线框模式时背景色
+    //     hasBounds: false,
+    //     wireframes: true, // 线框模式
+    //     showSleeping: true, // 刚体睡眠状态
+    //     showDebug: false, // Debug 信息
+    //     showBroadphase: false, // 粗测阶段
+    //     showBounds: false, // 刚体的界限
+    //     showVelocity: false, // 移动刚体时速度
+    //     showCollisions: false, // 刚体碰撞点
+    //     showSeparations: false, // 刚体分离
+    //     showAxes: false, // 刚体轴线
+    //     showPositions: false, // 刚体位置
+    //     showAngleIndicator: false, // 刚体转角指示
+    //     showIds: false, // 显示每个刚体的 ID
+    //     showVertexNumbers: false, // 刚体顶点数
+    //     showConvexHulls: false, // 刚体凸包点
+    //     showInternalEdges: false, // 刚体内部边界
+    //     showMousePosition: false, // 鼠标约束线
+    //   },
+    // })
+    // // 创建一个方块和一个地面
+    // var box = Bodies.rectangle(400, 200, 80, 80)
+    // var ground = Bodies.rectangle(400, 610, 810, 60, { isStatic: true })
+
+    // // 将他们加入到这个物理引擎中
+    // Composite.add(engine.world, [box, ground])
+
+    // // 运行这个渲染器
+    // Render.run(render)
+
+    // // 创建一个运行环境，类似于U3D的Update函数
+    // var runner = Runner.create()
+
+    // // 开始渲染运行
+    // Runner.run(runner, engine)
+
+
+	// const world = Matter.World.create();
+
   }
 
   // 创建地图

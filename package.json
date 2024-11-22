@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/matter-js": "^0.19.7",
     "@types/p5": "^1.4.2",
-    "p5": "^1.4.2",
+    "matter-js": "^0.20.0",
+    "p5": "^1.11.1",
     "vue": "^3.2.37"
   },
   "devDependencies": {
