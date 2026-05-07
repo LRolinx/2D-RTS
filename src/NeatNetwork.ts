@@ -1273,7 +1273,9 @@ export default class Neat {
   /**
    * 导入一个训练模型
    */
-  import = (): Neat => {
+  import = (showPicker = false): Neat => {
+    if (!showPicker) return this;
+
     const hy = new Hyperparameters();
     const input = document.createElement("input");
     input.type = "button";
@@ -1286,12 +1288,14 @@ export default class Neat {
     input.onclick = () => s.click();
     s.onchange = (e) => {
       const reader = new FileReader();
-      const file = e.target.files[0];
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
       reader.readAsText(file);
       reader.onload = () => {
+        if (typeof reader.result !== "string") return;
         const oldNeat: Neat = JSON.parse(reader.result)
         console.log(oldNeat)
-        hy.default_activation = activation[oldNeat._activationName];
+        hy.default_activation = activation[oldNeat._activationName as keyof typeof activation];
         this._hyperparams = hy;
 
         this._inputs = oldNeat._inputs;

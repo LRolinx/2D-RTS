@@ -1,6 +1,8 @@
 import p5 from 'p5'
 import { Env } from '../../env'
 import { MapNode, aStarSearch } from '../../pathfinding'
+import tankImageUrl from '../../../../assets/units/test_tank/tank.png'
+import tankWreckImageUrl from '../../../../assets/units/test_tank/tank_dead.png'
 
 export class TestTank {
 	unitName: string = 'testTank'
@@ -26,8 +28,8 @@ export class TestTank {
 	constructor(p: p5, env: Env) {
 		this.p = p
 		this.env = env
-		this.image = this.p.loadImage('src/assets/units/test_tank/tank.png')
-		this.image_wreak = this.p.loadImage('src/assets/units/test_tank/tank_dead.png')
+		this.image = this.p.loadImage(tankImageUrl)
+		this.image_wreak = this.p.loadImage(tankWreckImageUrl)
 	}
 
 	setPath(endX: number, endY: number) {
@@ -119,7 +121,6 @@ export class TestTank {
 
 	draw() {
 		// 绘制本体
-		this.p.text(this.rotate, this.x, this.y)
 		this.p.push()
 		this.p.translate(this.x + this.width / 2, this.y + this.height / 2)
 		this.p.rotate(this.p.radians(this.rotate))
@@ -158,4 +159,3 @@ export class TestTank {
 
 
 }
-
