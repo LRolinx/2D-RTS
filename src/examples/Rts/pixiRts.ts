@@ -134,6 +134,7 @@ type BaseState = {
   maxHp: number
   sprite?: Sprite
   production?: ProductionJob
+  productionQueue: ProductionJob[]
 }
 
 type StructureKind = 'turret' | 'extractor' | 'radar' | 'repair' | 'factory' | 'airfield' | 'seaFactory'
@@ -171,6 +172,7 @@ type StructureState = {
   hpBar: Graphics
   flash: Graphics
   production?: ProductionJob
+  productionQueue: ProductionJob[]
   construction?: ConstructionJob
   dead: boolean
 }
@@ -638,8 +640,8 @@ export class PixiRts {
   private reinforceTimer = 1800
   private playerResources = 520
   private enemyResources = 540
-  private playerBase: BaseState = { team: 'player', x: 0, y: 0, hp: 1600, maxHp: 1600 }
-  private enemyBase: BaseState = { team: 'enemy', x: 0, y: 0, hp: 1800, maxHp: 1800 }
+  private playerBase: BaseState = { team: 'player', x: 0, y: 0, hp: 1600, maxHp: 1600, productionQueue: [] }
+  private enemyBase: BaseState = { team: 'enemy', x: 0, y: 0, hp: 1800, maxHp: 1800, productionQueue: [] }
   private rngSeed = 7
   private strategicAi?: Neat
   private aiDecisionTimer = 0
@@ -1885,8 +1887,8 @@ export class PixiRts {
       : this.isWaterProducedRole(role)
         ? 'seaFactory'
         : 'factory'
-	    const producer = this.completedTeamStructures('player', producerKind)
-	      .filter((structure) => !structure.production)
+    const producer = this.completedTeamStructures('player', producerKind)
+      .filter((structure) => this.productionSlotsUsed(structure) < 3)
 	      .sort((a, b) => a.attackCooldown - b.attackCooldown)[0]
 	    if (producer) this.queueStructureProduction(producer, role)
 	  }
@@ -1907,10 +1909,10 @@ export class PixiRts {
     return !this.isBaseProducedRole(role) && !this.isAirProducedRole(role) && !this.isWaterProducedRole(role)
 	  }
 
-	  private queueBaseProduction(team: Team, role: UnitRole) {
+  private queueBaseProduction(team: Team, role: UnitRole) {
 	    if (!this.isBaseProducedRole(role)) return false
 	    const base = team === 'player' ? this.playerBase : this.enemyBase
-	    if (base.production) return false
+    if (this.productionSlotsUsed(base) >= 3) return false
     const alive = this.units.filter((unit) => unit.team === team && !unit.dead).length
     const cap = this.unitCap(team, 20)
     if (alive >= cap) return false
@@ -1918,13 +1920,19 @@ export class PixiRts {
     const cost = this.unitCost(role)
     if (!this.spendResources(team, cost)) return false
 
-    base.production = {
+    const job = {
       role,
       progress: 0,
       duration: this.unitProductionDuration(role) * 0.85,
     }
+    if (base.production) base.productionQueue.push(job)
+    else base.production = job
     this.drawUi()
     return true
+  }
+
+  private productionSlotsUsed(producer: BaseState | StructureState) {
+    return (producer.production ? 1 : 0) + producer.productionQueue.length
   }
 
   private buildStructureAtSelection(kind: StructureKind) {
@@ -2127,6 +2135,7 @@ export class PixiRts {
 	      y: Math.floor(this.rows * 0.56),
       hp: 1600,
       maxHp: 1600,
+      productionQueue: [],
     }
     this.enemyBase = {
       team: 'enemy',
@@ -2134,6 +2143,7 @@ export class PixiRts {
       y: Math.floor(this.rows * 0.56),
       hp: 1800,
       maxHp: 1800,
+      productionQueue: [],
     }
     if (this.matchEndMode) this.enemyBase.hp = 0
     this.clearSafeZone(this.playerBase.x, this.playerBase.y, 5)
@@ -2481,6 +2491,7 @@ export class PixiRts {
       sprites: [],
       hpBar,
       flash,
+      productionQueue: [],
       dead: false,
     }
 
@@ -2821,6 +2832,9 @@ export class PixiRts {
   }
 
   private advanceBaseProduction(base: BaseState, delta: number) {
+    if (!base.production && base.productionQueue.length > 0) {
+      base.production = base.productionQueue.shift()
+    }
     if (!base.production) return
 
     base.production.progress = Math.min(base.production.duration, base.production.progress + delta)
@@ -2834,7 +2848,7 @@ export class PixiRts {
     const unit = this.createUnitFromBase(base, role, alive)
     this.units.push(unit)
     this.spawnExplosion(unit.x, unit.y, base.team === 'player' ? 0x67e8a5 : 0xff6b6b)
-    base.production = undefined
+    base.production = base.productionQueue.shift()
   }
 
   private ensureEnemyBuilderProduction() {
@@ -2940,10 +2954,11 @@ export class PixiRts {
 	  private ensureBaseBuilderProduction(team: Team, intent: AiIntent) {
 	    const base = team === 'player' ? this.playerBase : this.enemyBase
 	    const builders = this.teamBuilders(team).length
-	    if (builders === 0 && base.production && base.production.role !== 'engineer') {
-	      base.production = undefined
-	    }
-	    if (base.production || this.resourcesFor(team) < this.unitCost('engineer')) return
+    if (builders === 0 && base.production && base.production.role !== 'engineer') {
+      base.production = undefined
+      base.productionQueue = []
+    }
+    if (base.production || base.productionQueue.length > 0 || this.resourcesFor(team) < this.unitCost('engineer')) return
 	    const reserve = this.economyBuildReserve(team)
 	    if (builders > 0 && this.resourcesFor(team) - reserve < Math.min(this.unitCost('engineer'), this.unitCost('tank'))) return
     const desiredBuilders = intent.desiredBuilders
@@ -4412,7 +4427,10 @@ export class PixiRts {
     }
   }
 
-	  private updateFactoryProduction(structure: StructureState, delta: number) {
+  private updateFactoryProduction(structure: StructureState, delta: number) {
+    if (!structure.production && structure.productionQueue.length > 0) {
+      structure.production = structure.productionQueue.shift()
+    }
     if (structure.production) {
       structure.production.progress = Math.min(structure.production.duration, structure.production.progress + delta)
       if (structure.production.progress >= structure.production.duration) {
@@ -4438,8 +4456,8 @@ export class PixiRts {
 	    }
 	  }
 	
-	  private queueStructureProduction(structure: StructureState, role: UnitRole) {
-	    if (structure.dead || structure.construction || structure.production) return false
+  private queueStructureProduction(structure: StructureState, role: UnitRole) {
+    if (structure.dead || structure.construction || this.productionSlotsUsed(structure) >= 3) return false
 	    if (structure.kind === 'factory' && !this.isFactoryProducedRole(role)) return false
 	    if (structure.kind === 'airfield' && !this.isAirProducedRole(role)) return false
 	    if (structure.kind === 'seaFactory' && !this.isWaterProducedRole(role)) return false
@@ -4449,12 +4467,14 @@ export class PixiRts {
 	
 	    const cost = this.unitCost(role)
 	    if (!this.spendResources(structure.team, cost)) return false
-	    structure.production = {
-	      role,
-	      progress: 0,
-	      duration: this.unitProductionDuration(role),
-	    }
-	    return true
+    const job = {
+      role,
+      progress: 0,
+      duration: this.unitProductionDuration(role),
+    }
+    if (structure.production) structure.productionQueue.push(job)
+    else structure.production = job
+    return true
 	  }
 
   private completeFactoryProduction(structure: StructureState) {
@@ -4466,7 +4486,7 @@ export class PixiRts {
     const unit = this.createUnitFromFactory(structure, role, alive)
     this.units.push(unit)
     this.spawnExplosion(unit.x, unit.y, structure.team === 'player' ? 0x67e8a5 : 0xff6b6b)
-    structure.production = undefined
+    structure.production = structure.productionQueue.shift()
     structure.attackCooldown = structure.cooldown
   }
 
@@ -5221,11 +5241,11 @@ export class PixiRts {
 	    const playerFactories = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'factory' && !structure.dead)
 	    const playerAirfields = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'airfield' && !structure.dead)
 	    const playerSeaFactories = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'seaFactory' && !structure.dead)
-	    const activeFactoryJobs = playerFactories.filter((structure) => structure.production).length
-	    const activeAirJobs = playerAirfields.filter((structure) => structure.production).length
-	    const activeSeaJobs = playerSeaFactories.filter((structure) => structure.production).length
+	    const activeFactoryJobs = playerFactories.reduce((sum, structure) => sum + this.productionSlotsUsed(structure), 0)
+	    const activeAirJobs = playerAirfields.reduce((sum, structure) => sum + this.productionSlotsUsed(structure), 0)
+	    const activeSeaJobs = playerSeaFactories.reduce((sum, structure) => sum + this.productionSlotsUsed(structure), 0)
     const baseProduction = this.playerBase.production
-      ? `${PRODUCTION_LABELS[this.playerBase.production.role]} ${Math.round((this.playerBase.production.progress / this.playerBase.production.duration) * 100)}%`
+      ? `${PRODUCTION_LABELS[this.playerBase.production.role]} ${Math.round((this.playerBase.production.progress / this.playerBase.production.duration) * 100)}% +${this.playerBase.productionQueue.length}`
       : '空闲'
     const enemyBaseProduction = this.enemyBase.production
       ? `${PRODUCTION_LABELS[this.enemyBase.production.role]} ${Math.round((this.enemyBase.production.progress / this.enemyBase.production.duration) * 100)}%`
@@ -5351,8 +5371,8 @@ export class PixiRts {
         `我方 ${playerAlive}  敌方 ${enemyAlive}  防御 ${playerTurrets}/${enemyTurrets}`,
         `资源点 ${controlledNodes}/${this.resourceNodes.length}  增援 ${Math.max(0, Math.ceil(this.reinforceTimer / 60))}s`,
         `基地 ${Math.ceil(this.playerBase.hp)}/${this.playerBase.maxHp}  ${baseProduction}`,
-        `工厂 ${activeFactoryJobs}/${playerFactories.length}  空军 ${activeAirJobs}/${playerAirfields.length}`,
-        `船厂 ${activeSeaJobs}/${playerSeaFactories.length}`,
+        `工厂 ${activeFactoryJobs}/${playerFactories.length * 3}  空军 ${activeAirJobs}/${playerAirfields.length * 3}`,
+        `船厂 ${activeSeaJobs}/${playerSeaFactories.length * 3}`,
         `AI ${this.mapModeLabel(this.mapMode)}·${this.aiPhaseLabel(this.aiIntent.enemy.phase)} ${this.aiIntent.enemy.lastAction}`,
         `选中 ${selected}${this.selectedUnits.length > 1 ? `  血量 ${selectedPower}` : ''}`,
         this.stressMode ? '压测: 1000单位同屏' : '',
