@@ -155,6 +155,82 @@ type ResearchJob = {
 
 type TechState = Record<ResearchKey, number>
 
+type SavedBaseState = {
+  team: Team
+  x: number
+  y: number
+  hp: number
+  maxHp: number
+  production?: ProductionJob
+  productionQueue: ProductionJob[]
+}
+
+type SavedUnitState = {
+  id: number
+  team: Team
+  role: UnitRole
+  x: number
+  y: number
+  hp: number
+  maxHp: number
+  speed: number
+  currentSpeed: number
+  path: GridPoint[]
+  pathIndex: number
+  desiredRotation: number
+  animationClock: number
+  turretRotation: number
+  aiCooldown: number
+  attackCooldown: number
+  commandUntil: number
+}
+
+type SavedStructureState = {
+  id: number
+  team: Team
+  kind: StructureKind
+  x: number
+  y: number
+  hp: number
+  maxHp: number
+  range: number
+  damage: number
+  cooldown: number
+  attackCooldown: number
+  canAttackFlying?: boolean
+  canAttackLand?: boolean
+  production?: ProductionJob
+  productionQueue: ProductionJob[]
+  construction?: ConstructionJob
+}
+
+type SavedBattleState = {
+  version: 1
+  mapMode: MapMode
+  cols: number
+  rows: number
+  playerResources: number
+  enemyResources: number
+  playerBase: SavedBaseState
+  enemyBase: SavedBaseState
+  resourceNodes: ResourceNode[]
+  units: SavedUnitState[]
+  structures: SavedStructureState[]
+  tech: Record<Team, TechState>
+  research?: ResearchJob
+  enemyResearch?: ResearchJob
+  frameCount: number
+  generation: number
+  reinforceTimer: number
+  simulationSpeed: number
+  isPaused: boolean
+  battleState: 'running' | 'playerWon' | 'enemyWon'
+  lastWinner: string
+  rngSeed: number
+  aiIntent: Record<Team, AiIntent>
+  camera: CameraState
+}
+
 type ConstructionJob = {
   builderId: number
   progress: number
@@ -648,6 +724,9 @@ export class PixiRts {
   private simulationSpeed = 1
   private battleState: 'running' | 'playerWon' | 'enemyWon' = 'running'
   private lastWinner = '开局'
+  private saveStatus = '新战局'
+  private nextUnitId = 1
+  private nextStructureId = 1
   private reinforceTimer = 1800
   private playerResources = 520
   private enemyResources = 540
@@ -1825,6 +1904,17 @@ export class PixiRts {
       return
     }
 
+    if (event.code === 'F5') {
+      event.preventDefault()
+      this.saveGame()
+      return
+    }
+    if (event.code === 'F9') {
+      event.preventDefault()
+      this.loadGame()
+      return
+    }
+
     if (this.battleState !== 'running') return
 
     const controlGroupMatch = event.code.match(/^Digit([1-9])$/)
@@ -2246,6 +2336,8 @@ export class PixiRts {
     this.createResourceNodes()
     this.drawTerrain()
 
+    this.nextUnitId = 1
+    this.nextStructureId = 1
     this.resetUnits()
     this.resetStructures()
     this.selectedUnits = []
@@ -2257,6 +2349,7 @@ export class PixiRts {
     this.battleState = 'running'
     this.isPaused = false
     this.lastWinner = '开局'
+    this.saveStatus = '新战局'
 	    this.reinforceTimer = 1800
 	    this.playerResources = 620
 	    this.enemyResources = 620
@@ -2560,6 +2653,235 @@ export class PixiRts {
     this.beams = []
   }
 
+  private saveStorageKey() {
+    return `2d-rts-save-v1-${this.mapMode}`
+  }
+
+  private saveGame() {
+    if (typeof localStorage === 'undefined') {
+      this.saveStatus = '浏览器不支持'
+      this.drawUi()
+      return
+    }
+
+    const serializeJob = (job?: ProductionJob) => job ? { ...job } : undefined
+    const serializeBase = (base: BaseState): SavedBaseState => ({
+      team: base.team,
+      x: base.x,
+      y: base.y,
+      hp: base.hp,
+      maxHp: base.maxHp,
+      production: serializeJob(base.production),
+      productionQueue: base.productionQueue.map((job) => ({ ...job })),
+    })
+
+    const state: SavedBattleState = {
+      version: 1,
+      mapMode: this.mapMode,
+      cols: this.cols,
+      rows: this.rows,
+      playerResources: this.playerResources,
+      enemyResources: this.enemyResources,
+      playerBase: serializeBase(this.playerBase),
+      enemyBase: serializeBase(this.enemyBase),
+      resourceNodes: this.resourceNodes.map((node) => ({ ...node })),
+      units: this.units.filter((unit) => !unit.dead).map((unit) => ({
+        id: unit.id,
+        team: unit.team,
+        role: unit.def.role,
+        x: unit.x,
+        y: unit.y,
+        hp: unit.hp,
+        maxHp: unit.maxHp,
+        speed: unit.speed,
+        currentSpeed: unit.currentSpeed,
+        path: unit.path.map((point) => ({ ...point })),
+        pathIndex: unit.pathIndex,
+        desiredRotation: unit.desiredRotation,
+        animationClock: unit.animationClock,
+        turretRotation: unit.turretRotation,
+        aiCooldown: unit.aiCooldown,
+        attackCooldown: unit.attackCooldown,
+        commandUntil: unit.commandUntil,
+      })),
+      structures: this.structures.filter((structure) => !structure.dead).map((structure) => ({
+        id: structure.id,
+        team: structure.team,
+        kind: structure.kind,
+        x: structure.x,
+        y: structure.y,
+        hp: structure.hp,
+        maxHp: structure.maxHp,
+        range: structure.range,
+        damage: structure.damage,
+        cooldown: structure.cooldown,
+        attackCooldown: structure.attackCooldown,
+        canAttackFlying: structure.canAttackFlying,
+        canAttackLand: structure.canAttackLand,
+        production: serializeJob(structure.production),
+        productionQueue: structure.productionQueue.map((job) => ({ ...job })),
+        construction: structure.construction ? { ...structure.construction } : undefined,
+      })),
+      tech: {
+        player: { ...this.tech.player },
+        enemy: { ...this.tech.enemy },
+      },
+      research: this.research ? { ...this.research } : undefined,
+      enemyResearch: this.enemyResearch ? { ...this.enemyResearch } : undefined,
+      frameCount: this.frameCount,
+      generation: this.generation,
+      reinforceTimer: this.reinforceTimer,
+      simulationSpeed: this.simulationSpeed,
+      isPaused: this.isPaused,
+      battleState: this.battleState,
+      lastWinner: this.lastWinner,
+      rngSeed: this.rngSeed,
+      aiIntent: {
+        player: { ...this.aiIntent.player },
+        enemy: { ...this.aiIntent.enemy },
+      },
+      camera: { ...this.camera },
+    }
+
+    try {
+      localStorage.setItem(this.saveStorageKey(), JSON.stringify(state))
+      this.saveStatus = '已保存'
+    } catch {
+      this.saveStatus = '保存失败'
+    }
+    this.drawUi()
+  }
+
+  private loadGame() {
+    if (typeof localStorage === 'undefined') {
+      this.saveStatus = '浏览器不支持'
+      this.drawUi()
+      return
+    }
+
+    const raw = localStorage.getItem(this.saveStorageKey())
+    if (!raw) {
+      this.saveStatus = '暂无存档'
+      this.drawUi()
+      return
+    }
+
+    try {
+      const state: unknown = JSON.parse(raw)
+      if (!this.isSavedBattleState(state)) throw new Error('invalid save')
+      this.restoreGame(state)
+      this.saveStatus = '已读档'
+    } catch {
+      this.saveStatus = '存档损坏'
+    }
+    this.drawUi()
+  }
+
+  private isSavedBattleState(value: unknown): value is SavedBattleState {
+    if (!value || typeof value !== 'object') return false
+    const state = value as Partial<SavedBattleState>
+    return state.version === 1 && state.mapMode === this.mapMode && Number.isFinite(state.cols)
+      && Number.isFinite(state.rows) && Array.isArray(state.units) && Array.isArray(state.structures)
+      && Array.isArray(state.resourceNodes) && Boolean(state.playerBase) && Boolean(state.enemyBase)
+  }
+
+  private restoreGame(state: SavedBattleState) {
+    this.rebuildWorld()
+
+    this.playerResources = Math.max(0, state.playerResources)
+    this.enemyResources = Math.max(0, state.enemyResources)
+    const playerSprite = this.playerBase.sprite
+    const enemySprite = this.enemyBase.sprite
+    this.playerBase = { ...state.playerBase, sprite: playerSprite }
+    this.enemyBase = { ...state.enemyBase, sprite: enemySprite }
+    this.resourceNodes = state.resourceNodes.map((node) => ({ ...node }))
+    this.tech = {
+      player: { ...state.tech.player },
+      enemy: { ...state.tech.enemy },
+    }
+    this.research = state.research ? { ...state.research } : undefined
+    this.enemyResearch = state.enemyResearch ? { ...state.enemyResearch } : undefined
+    this.frameCount = Math.max(0, state.frameCount)
+    this.generation = Math.max(1, state.generation)
+    this.reinforceTimer = Math.max(0, state.reinforceTimer)
+    this.simulationSpeed = Math.max(0.25, Math.min(3, state.simulationSpeed))
+    this.isPaused = state.isPaused
+    this.battleState = state.battleState
+    this.lastWinner = state.lastWinner
+    this.rngSeed = state.rngSeed
+    this.aiIntent = {
+      player: { ...state.aiIntent.player },
+      enemy: { ...state.aiIntent.enemy },
+    }
+    this.selectedUnits = []
+    this.selectedCell = undefined
+    this.activeBuilder = undefined
+    this.unitSpatialHash.clear()
+    this.pathReservations.clear()
+    this.destroyChildren(this.unitLayer)
+    this.destroyChildren(this.wreckLayer)
+    this.destroyChildren(this.structureLayer)
+    this.units = []
+    this.structures = []
+    this.nextUnitId = 1
+    this.nextStructureId = 1
+
+    for (const saved of state.units) {
+      const def = this.unitDefs[saved.role]
+      if (!def || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) continue
+      const unit = this.createUnit(saved.team, def, this.pixelToCell(saved.x, saved.y), saved.id)
+      unit.id = saved.id
+      unit.x = Math.max(0, Math.min(this.boardWidth, saved.x))
+      unit.y = Math.max(0, Math.min(this.boardHeight, saved.y))
+      unit.hp = Math.max(1, Math.min(saved.maxHp, saved.hp))
+      unit.maxHp = Math.max(1, saved.maxHp)
+      unit.speed = Math.max(0, saved.speed)
+      unit.currentSpeed = saved.currentSpeed
+      unit.path = saved.path.filter((point) => this.isInside(point.x, point.y))
+      unit.pathIndex = Math.max(0, Math.min(unit.path.length, saved.pathIndex))
+      unit.desiredRotation = saved.desiredRotation
+      unit.animationClock = saved.animationClock
+      unit.turretRotation = saved.turretRotation
+      unit.aiCooldown = saved.aiCooldown
+      unit.attackCooldown = saved.attackCooldown
+      unit.commandUntil = saved.commandUntil
+      this.units.push(unit)
+      this.nextUnitId = Math.max(this.nextUnitId, unit.id + 1)
+    }
+
+    for (const saved of state.structures) {
+      if (!STRUCTURE_TEXTURES[saved.kind] || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) continue
+      const structure = this.createStructure(saved.team, this.pixelToCell(saved.x, saved.y), saved.kind)
+      structure.id = saved.id
+      structure.x = Math.max(0, Math.min(this.boardWidth, saved.x))
+      structure.y = Math.max(0, Math.min(this.boardHeight, saved.y))
+      structure.hp = Math.max(1, Math.min(saved.maxHp, saved.hp))
+      structure.maxHp = Math.max(1, saved.maxHp)
+      structure.range = saved.range
+      structure.damage = saved.damage
+      structure.cooldown = saved.cooldown
+      structure.attackCooldown = saved.attackCooldown
+      structure.canAttackFlying = saved.canAttackFlying
+      structure.canAttackLand = saved.canAttackLand
+      structure.production = saved.production ? { ...saved.production } : undefined
+      structure.productionQueue = saved.productionQueue.map((job) => ({ ...job }))
+      structure.construction = saved.construction ? { ...saved.construction } : undefined
+      this.structures.push(structure)
+      this.nextStructureId = Math.max(this.nextStructureId, structure.id + 1)
+    }
+
+    this.rebuildPathReservations()
+    this.buildUnitSpatialHash()
+    this.camera = { ...state.camera }
+    this.clampCamera()
+    this.applyCamera()
+    this.drawMap()
+    this.drawOverlay()
+    this.drawPath()
+    this.drawMinimap()
+    this.drawFog()
+  }
+
   private createStructure(team: Team, cell: GridPoint, kind: StructureKind): StructureState {
     const view = new Graphics()
     const hpBar = new Graphics()
@@ -2576,7 +2898,7 @@ export class PixiRts {
 	      ? this.normalizeStructureHp(configuredHp)
 	      : kind === 'factory' ? 420 : kind === 'airfield' ? 360 : kind === 'seaFactory' ? 440 : kind === 'repair' ? 300 : kind === 'extractor' ? 220 : kind === 'radar' ? 180 : 260
     const structure = {
-      id: this.structures.length + 1,
+      id: this.nextStructureId++,
       team,
       kind,
       x: cell.x * GRID_SIZE + GRID_SIZE / 2,
@@ -2719,7 +3041,7 @@ export class PixiRts {
 
     const maxHp = this.unitMaxHp(team, def)
     const unit = {
-      id: this.units.length + 1,
+      id: this.nextUnitId++,
       team,
       def,
       x: start.x * GRID_SIZE + GRID_SIZE / 2,
@@ -5525,7 +5847,7 @@ export class PixiRts {
       this.uiStats.position.set(cardX + 10, 266)
       this.uiStats.style.wordWrapWidth = Math.max(180, sidebarWidth - 44)
       this.uiStats.text = [
-        `${this.isPaused ? '暂停' : '运行'}  x${this.simulationSpeed.toFixed(2)}  代数 ${this.generation}`,
+        `${this.isPaused ? '暂停' : '运行'}  x${this.simulationSpeed.toFixed(2)}  代数 ${this.generation}  存档 ${this.saveStatus}`,
         `我方 ${playerAlive}  敌方 ${enemyAlive}  防御 ${playerTurrets}/${enemyTurrets}`,
         `资源点 ${controlledNodes}/${this.resourceNodes.length}  增援 ${Math.max(0, Math.ceil(this.reinforceTimer / 60))}s`,
         `基地 ${Math.ceil(this.playerBase.hp)}/${this.playerBase.maxHp}  ${baseProduction}`,

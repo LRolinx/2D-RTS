@@ -15,6 +15,7 @@
         <span>K/L/,/. 海军</span>
         <span>[ 船厂</span>
         <span>4-6 科技</span>
+        <span>F5/F9 存档</span>
         <span>战术 AI</span>
       </div>
     </header>
