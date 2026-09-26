@@ -9,24 +9,48 @@ import {
   Texture,
 } from 'pixi.js'
 import Neat, { activation, Hyperparameters } from '../../NeatNetwork'
+import {
+  createInitialStrategicAiPlan,
+  evaluateStrategicAi,
+  type StrategicAiBias,
+  type StrategicAiPlan,
+  type StrategicAiSnapshot,
+} from './strategicAi'
 import tankImageUrl from '../../assets/units/test_tank/tank.png'
+import tankDeadImageUrl from '../../assets/units/test_tank/tank_dead.png'
 import scoutImageUrl from '../../assets/units/scout/base.png'
+import scoutDeadImageUrl from '../../assets/units/scout/base_dead.png'
 import plasmaTankImageUrl from '../../assets/units/plasma_tank/plasma_tank.png'
+import plasmaTankDeadImageUrl from '../../assets/units/plasma_tank/plasma_tank_dead.png'
 import mammothTankImageUrl from '../../assets/units/mammoth_tank/mammoth_tank.png'
+import mammothTankDeadImageUrl from '../../assets/units/mammoth_tank/mammoth_tank_dead.png'
 import helicopterImageUrl from '../../assets/units/helicopter/helicopter.png'
+import helicopterDeadImageUrl from '../../assets/units/helicopter/helicopter_dead.png'
 import helicopterBladesImageUrl from '../../assets/units/helicopter/helicopter_blades.png'
 import missileTankImageUrl from '../../assets/units/missile_tank/missile_tank.png'
+import missileTankDeadImageUrl from '../../assets/units/missile_tank/missile_tank_dead.png'
 import laserTankImageUrl from '../../assets/units/laser_tank/laser_tank.png'
+import laserTankDeadImageUrl from '../../assets/units/laser_tank/laser_tank_dead.png'
 import artilleryImageUrl from '../../assets/units/tanks/artillery.png'
+import artilleryDeadImageUrl from '../../assets/units/tanks/artillery_dead.png'
 import heavyArtilleryImageUrl from '../../assets/units/tanks/heavy_artillery.png'
+import heavyArtilleryDeadImageUrl from '../../assets/units/tanks/heavy_artillery_dead.png'
 import experimentalTankImageUrl from '../../assets/units/experimental_tank/experimental_tank.png'
+import experimentalTankDeadImageUrl from '../../assets/units/experimental_tank/experimental_tank_dead.png'
 import interceptorImageUrl from '../../assets/units/interceptor/interceptor.png'
+import interceptorDeadImageUrl from '../../assets/units/interceptor/interceptor_dead.png'
 import heavyInterceptorImageUrl from '../../assets/units/heavy_interceptor/base2.png'
+import heavyInterceptorDeadImageUrl from '../../assets/units/heavy_interceptor/base_dead.png'
 import bomberImageUrl from '../../assets/units/bomber/base.png'
+import bomberDeadImageUrl from '../../assets/units/bomber/base_dead.png'
 import lightGunshipImageUrl from '../../assets/units/light_gunship/base.png'
+import lightGunshipDeadImageUrl from '../../assets/units/light_gunship/base_dead.png'
 import spyDroneImageUrl from '../../assets/units/spy_drone/base.png'
+import spyDroneDeadImageUrl from '../../assets/units/spy_drone/base_dead.png'
 import fireBeeImageUrl from '../../assets/units/fire_bee/body.png'
+import fireBeeDeadImageUrl from '../../assets/units/fire_bee/body_dead.png'
 import engineerImageUrl from '../../assets/units/combat_engineer/base.png'
+import engineerDeadImageUrl from '../../assets/units/combat_engineer/base_dead.png'
 import tankTurretImageUrl from '../../assets/units/test_tank/tank_turret.png'
 import plasmaTurretImageUrl from '../../assets/units/plasma_tank/turret.png'
 import mammothTurretImageUrl from '../../assets/units/mammoth_tank/mammoth_tank_turret.png'
@@ -86,6 +110,7 @@ type GridPoint = {
 }
 
 type Team = 'player' | 'enemy'
+type MapMode = 'frontier' | 'highlands' | 'archipelago'
 type IniData = Record<string, Record<string, string>>
 type TurretIni = { section: string; id: string } & Record<string, string>
 
@@ -151,13 +176,7 @@ type TerrainType = 'shortGrass' | 'longGrass' | 'dirt' | 'sand' | 'stone' | 'mou
 type AttackKind = 'bullet' | 'cannon' | 'laser' | 'lightning' | 'beam' | 'missile' | 'artillery' | 'bomb' | 'rapid' | 'scan'
 type MovementLayer = 'ground' | 'water' | 'air'
 
-type AiIntent = {
-  economy: number
-  production: number
-  defense: number
-  attack: number
-  air: number
-  tech: number
+type AiIntent = StrategicAiPlan & {
   lastAction: string
 }
 
@@ -210,6 +229,7 @@ type UnitDef = {
   role: UnitRole
   name: string
   texture: Texture
+  deadTexture?: Texture
   frames?: Texture[]
   frameWidth: number
   frameHeight: number
@@ -542,6 +562,11 @@ export class PixiRts {
   private uiTitle: Text
   private uiStats: Text
   private uiCommands: Text
+  private uiMatchPanel: Graphics
+  private uiMatchResult: Text
+  private uiMatchDetails: Text
+  private uiMatchButton: Text
+  private matchRestartRect = { x: 0, y: 0, width: 0, height: 0 }
   private map: number[][] = []
   private terrainMap: TerrainType[][] = []
   private heightMap: number[][] = []
@@ -574,8 +599,8 @@ export class PixiRts {
   private aiDecisionTimer = 0
   private aiGenomeIndex = 0
   private aiIntent: Record<Team, AiIntent> = {
-    player: { economy: 0.62, production: 0.5, defense: 0.45, attack: 0.42, air: 0.35, tech: 0.38, lastAction: '开局部署' },
-    enemy: { economy: 0.62, production: 0.5, defense: 0.45, attack: 0.42, air: 0.35, tech: 0.38, lastAction: '开局部署' },
+    player: { ...createInitialStrategicAiPlan(), lastAction: '玩家控制' },
+    enemy: { ...createInitialStrategicAiPlan(), lastAction: '开局部署' },
   }
   private unitIniConfigs: Record<UnitRole, IniData> = {} as Record<UnitRole, IniData>
   private structureIniConfigs: Record<StructureKind, IniData> = {} as Record<StructureKind, IniData>
@@ -583,6 +608,12 @@ export class PixiRts {
   private pathReservations = new Map<string, number>()
   private readonly qaMode = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('qa') ?? ''
   private readonly stressMode = this.qaMode.includes('stress-1000')
+  private readonly matchEndMode = this.qaMode.includes('match-end')
+  private readonly mapMode: MapMode = (() => {
+    if (typeof window === 'undefined') return 'frontier'
+    const requested = new URLSearchParams(window.location.search).get('map')
+    return requested === 'highlands' || requested === 'archipelago' ? requested : 'frontier'
+  })()
   private frameCount = 0
   private mapRefreshTimer = 0
   private uiRefreshTimer = 0
@@ -592,6 +623,7 @@ export class PixiRts {
       role: 'engineer',
       name: '战地工程师',
       texture: Texture.from(engineerImageUrl),
+      deadTexture: Texture.from(engineerDeadImageUrl),
       frameWidth: 45,
       frameHeight: 49,
       frameCount: 1,
@@ -614,6 +646,7 @@ export class PixiRts {
       role: 'scout',
       name: '侦察车',
       texture: Texture.from(scoutImageUrl),
+      deadTexture: Texture.from(scoutDeadImageUrl),
       frameWidth: 24,
       frameHeight: 21,
       frameCount: 1,
@@ -635,6 +668,7 @@ export class PixiRts {
       role: 'tank',
       name: '突击坦克',
       texture: Texture.from(tankImageUrl),
+      deadTexture: Texture.from(tankDeadImageUrl),
       frameWidth: 16,
       frameHeight: 30,
       frameCount: 3,
@@ -661,6 +695,7 @@ export class PixiRts {
       role: 'plasma',
       name: '等离子坦克',
       texture: Texture.from(plasmaTankImageUrl),
+      deadTexture: Texture.from(plasmaTankDeadImageUrl),
       frameWidth: 26,
       frameHeight: 29,
       frameCount: 2,
@@ -686,6 +721,7 @@ export class PixiRts {
       role: 'mammoth',
       name: '猛犸重坦',
       texture: Texture.from(mammothTankImageUrl),
+      deadTexture: Texture.from(mammothTankDeadImageUrl),
       frameWidth: 30,
       frameHeight: 41,
       frameCount: 3,
@@ -713,6 +749,7 @@ export class PixiRts {
       role: 'helicopter',
       name: '武装直升机',
       texture: Texture.from(helicopterImageUrl),
+      deadTexture: Texture.from(helicopterDeadImageUrl),
       frameWidth: 26,
       frameHeight: 46,
       frameCount: 1,
@@ -740,6 +777,7 @@ export class PixiRts {
       role: 'missile',
       name: '导弹坦克',
       texture: Texture.from(missileTankImageUrl),
+      deadTexture: Texture.from(missileTankDeadImageUrl),
       frameWidth: 30,
       frameHeight: 39,
       frameCount: 2,
@@ -766,6 +804,7 @@ export class PixiRts {
       role: 'laser',
       name: '激光坦克',
       texture: Texture.from(laserTankImageUrl),
+      deadTexture: Texture.from(laserTankDeadImageUrl),
       frameWidth: 24,
       frameHeight: 29,
       frameCount: 3,
@@ -791,6 +830,7 @@ export class PixiRts {
       role: 'artillery',
       name: '自行火炮',
       texture: Texture.from(artilleryImageUrl),
+      deadTexture: Texture.from(artilleryDeadImageUrl),
       frameWidth: 24,
       frameHeight: 47,
       frameCount: 3,
@@ -813,6 +853,7 @@ export class PixiRts {
       role: 'heavyArtillery',
       name: '重型火炮',
       texture: Texture.from(heavyArtilleryImageUrl),
+      deadTexture: Texture.from(heavyArtilleryDeadImageUrl),
       frameWidth: 29,
       frameHeight: 38,
       frameCount: 2,
@@ -840,6 +881,7 @@ export class PixiRts {
       role: 'experimental',
       name: '实验坦克',
       texture: Texture.from(experimentalTankImageUrl),
+      deadTexture: Texture.from(experimentalTankDeadImageUrl),
       frameWidth: 62,
       frameHeight: 86,
       frameCount: 3,
@@ -867,6 +909,7 @@ export class PixiRts {
       role: 'interceptor',
       name: '拦截机',
       texture: Texture.from(interceptorImageUrl),
+      deadTexture: Texture.from(interceptorDeadImageUrl),
       frameWidth: 24,
       frameHeight: 22,
       frameCount: 1,
@@ -889,6 +932,7 @@ export class PixiRts {
       role: 'heavyInterceptor',
       name: '重拦截机',
       texture: Texture.from(heavyInterceptorImageUrl),
+      deadTexture: Texture.from(heavyInterceptorDeadImageUrl),
       frameWidth: 32,
       frameHeight: 35,
       frameCount: 1,
@@ -911,6 +955,7 @@ export class PixiRts {
       role: 'bomber',
       name: '轰炸机',
       texture: Texture.from(bomberImageUrl),
+      deadTexture: Texture.from(bomberDeadImageUrl),
       frameWidth: 45,
       frameHeight: 47,
       frameCount: 1,
@@ -934,6 +979,7 @@ export class PixiRts {
       role: 'gunship',
       name: '轻炮艇',
       texture: Texture.from(lightGunshipImageUrl),
+      deadTexture: Texture.from(lightGunshipDeadImageUrl),
       frameWidth: 24,
       frameHeight: 20,
       frameCount: 2,
@@ -956,6 +1002,7 @@ export class PixiRts {
       role: 'spyDrone',
       name: '侦察无人机',
       texture: Texture.from(spyDroneImageUrl),
+      deadTexture: Texture.from(spyDroneDeadImageUrl),
       frameWidth: 45,
       frameHeight: 47,
       frameCount: 1,
@@ -979,6 +1026,7 @@ export class PixiRts {
       role: 'fireBee',
       name: '火蜂',
       texture: Texture.from(fireBeeImageUrl),
+      deadTexture: Texture.from(fireBeeDeadImageUrl),
       frameWidth: 43,
       frameHeight: 57,
       frameCount: 2,
@@ -1049,6 +1097,31 @@ export class PixiRts {
       lineHeight: 31,
       wordWrap: false,
     }))
+    this.uiMatchPanel = new Graphics()
+    this.uiMatchResult = new Text('', new TextStyle({
+      fill: 0xf2f5ff,
+      fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
+      fontSize: 32,
+      fontWeight: '800',
+      align: 'center',
+    }))
+    this.uiMatchDetails = new Text('', new TextStyle({
+      fill: 0xcdd5f5,
+      fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
+      fontSize: 14,
+      lineHeight: 24,
+      align: 'center',
+    }))
+    this.uiMatchButton = new Text('重新开始', new TextStyle({
+      fill: 0xf2f5ff,
+      fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
+      fontSize: 15,
+      fontWeight: '700',
+      align: 'center',
+    }))
+    this.uiMatchResult.anchor.set(0.5)
+    this.uiMatchDetails.anchor.set(0.5)
+    this.uiMatchButton.anchor.set(0.5)
 
     this.worldLayer.addChild(this.terrainLayer as any)
     this.worldLayer.addChild(this.mapLayer as any)
@@ -1059,7 +1132,16 @@ export class PixiRts {
     this.worldLayer.addChild(this.effectLayer as any)
     this.worldLayer.addChild(this.overlayLayer as any)
     this.app.stage.addChild(this.worldLayer as any)
-    this.uiLayer.addChild(this.uiBackground as any, this.uiTitle as any, this.uiStats as any, this.uiCommands as any)
+    this.uiLayer.addChild(
+      this.uiBackground as any,
+      this.uiTitle as any,
+      this.uiStats as any,
+      this.uiCommands as any,
+      this.uiMatchPanel as any,
+      this.uiMatchResult as any,
+      this.uiMatchDetails as any,
+      this.uiMatchButton as any,
+    )
     this.app.stage.addChild(this.uiLayer as any)
     this.app.stage.addChild(this.minimapLayer as any)
 
@@ -1463,6 +1545,8 @@ export class PixiRts {
       return
     }
 
+    if (this.battleState !== 'running') return
+
     const point = this.eventToBoardPoint(event)
 
     if (event.button === 1 || event.altKey) {
@@ -1528,6 +1612,11 @@ export class PixiRts {
       return
     }
 
+    if (this.battleState !== 'running') {
+      this.dragState = undefined
+      return
+    }
+
     if (!this.dragState || this.dragState.button !== 0) return
 
     const point = this.eventToBoardPoint(event) ?? this.dragState.worldCurrent
@@ -1567,15 +1656,18 @@ export class PixiRts {
   }
 
   private handleKeyDown = (event: KeyboardEvent) => {
+    if (event.code === 'KeyR' || (event.code === 'Enter' && this.battleState !== 'running')) {
+      event.preventDefault()
+      this.rebuildWorld()
+      return
+    }
+
+    if (this.battleState !== 'running') return
+
     if (event.code === 'Space') {
       event.preventDefault()
       this.isPaused = !this.isPaused
       this.drawUi()
-    }
-
-    if (event.code === 'KeyR') {
-      event.preventDefault()
-      this.rebuildWorld()
     }
 
     if (event.code === 'Home') {
@@ -1859,11 +1951,12 @@ export class PixiRts {
     }
     this.enemyBase = {
       team: 'enemy',
-	      x: Math.floor(this.cols * 0.88),
-	      y: Math.floor(this.rows * 0.56),
+      x: Math.floor(this.cols * 0.88),
+      y: Math.floor(this.rows * 0.56),
       hp: 1800,
       maxHp: 1800,
     }
+    if (this.matchEndMode) this.enemyBase.hp = 0
     this.clearSafeZone(this.playerBase.x, this.playerBase.y, 5)
     this.clearSafeZone(this.enemyBase.x, this.enemyBase.y, 5)
     this.clearCorridor(this.playerBase, this.enemyBase, 2)
@@ -1878,6 +1971,8 @@ export class PixiRts {
     this.dragState = undefined
     this.clearTransientVisuals()
     this.battleState = 'running'
+    this.isPaused = false
+    this.lastWinner = '开局'
 	    this.reinforceTimer = 1800
 	    this.playerResources = 620
 	    this.enemyResources = 620
@@ -1887,8 +1982,8 @@ export class PixiRts {
     this.minimapRefreshTimer = 0
     this.aiDecisionTimer = 0
     this.aiGenomeIndex = 0
-    this.aiIntent.player.lastAction = '开局部署'
-    this.aiIntent.enemy.lastAction = '开局部署'
+    this.aiIntent.player = { ...createInitialStrategicAiPlan(), lastAction: '玩家控制' }
+    this.aiIntent.enemy = { ...createInitialStrategicAiPlan(), lastAction: '开局部署' }
     this.unitSpatialHash.clear()
     this.pathReservations.clear()
     this.camera = { x: 0, y: 0, scale: 1 }
@@ -1935,11 +2030,12 @@ export class PixiRts {
   }
 
   private continuousNoise(x: number, y: number, scale: number) {
+    const modeOffset = this.mapMode === 'highlands' ? 19 : this.mapMode === 'archipelago' ? 43 : 0
     return (
-      Math.sin(x * scale * 1.7) +
-      Math.cos(y * scale * 1.3) +
-      Math.sin((x + y) * scale * 0.9) +
-      Math.cos((x - y) * scale * 1.1)
+      Math.sin((x + modeOffset) * scale * 1.7) +
+      Math.cos((y - modeOffset * 0.7) * scale * 1.3) +
+      Math.sin((x + y + modeOffset) * scale * 0.9) +
+      Math.cos((x - y - modeOffset) * scale * 1.1)
     ) * 0.125 + 0.5
   }
 
@@ -1976,7 +2072,22 @@ export class PixiRts {
     const westPond = this.ellipseStrength(nx, ny, 0.14, 0.83, 0.14, 0.07)
     const eastPond = this.ellipseStrength(nx, ny, 0.74, 0.28, 0.11, 0.055)
     const lowerPond = this.ellipseStrength(nx, ny, 0.77, 0.9, 0.13, 0.055)
-    return Math.max(0, Math.min(1, Math.max(topRiver, eastCoast, southCoast, westPond, eastPond, lowerPond)))
+    const archipelago = this.mapMode === 'archipelago'
+      ? Math.max(
+        this.ellipseStrength(nx, ny, 0.3, 0.38, 0.19, 0.11),
+        this.ellipseStrength(nx, ny, 0.58, 0.72, 0.2, 0.12),
+      ) * 0.82
+      : 0
+    const waterScale = this.mapMode === 'highlands' ? 0.72 : 1
+    return Math.max(0, Math.min(1, Math.max(
+      topRiver * waterScale,
+      eastCoast * waterScale,
+      southCoast * waterScale,
+      westPond * waterScale,
+      eastPond * waterScale,
+      lowerPond * waterScale,
+      archipelago,
+    )))
   }
 
   private roadStrengthAt(x: number, y: number) {
@@ -1999,7 +2110,8 @@ export class PixiRts {
     const centerRidge = this.bandStrength(nx, centerRidgeX, 0.04) * this.rangeStrength(ny, 0.25, 0.8, 0.12)
     const southRocks = this.ellipseStrength(nx, ny, 0.63, 0.76, 0.18, 0.1)
     const brokenDetail = Math.max(0, this.continuousNoise(x + 211, y - 47, 0.12) - 0.47) * 0.9
-    return Math.max(northRidge, centerRidge, southRocks) * (0.62 + brokenDetail)
+    const highlandScale = this.mapMode === 'highlands' ? 1.28 : this.mapMode === 'archipelago' ? 0.82 : 1
+    return Math.min(1, Math.max(northRidge, centerRidge, southRocks) * (0.62 + brokenDetail) * highlandScale)
   }
 
   private bandStrength(value: number, center: number, halfWidth: number) {
@@ -2395,7 +2507,9 @@ export class PixiRts {
   }
 
   private update = (delta: number) => {
-    const scaledDelta = this.isPaused ? 0 : delta * this.simulationSpeed
+    if (this.battleState !== 'running') return
+
+    const scaledDelta = this.battleState === 'running' && !this.isPaused ? delta * this.simulationSpeed : 0
     let playerAlive = 0
     let enemyAlive = 0
     this.frameCount++
@@ -2452,20 +2566,11 @@ export class PixiRts {
     if (this.battleState !== 'running') {
       this.lastWinner = this.battleState === 'playerWon' ? '我方胜利' : '敌方胜利'
       this.generation++
-      this.playerBase.hp = this.playerBase.maxHp
-      this.enemyBase.hp = this.enemyBase.maxHp
-      this.playerBase.production = undefined
-      this.enemyBase.production = undefined
-      this.resetUnits()
-      this.resetStructures()
-      this.clearTransientVisuals()
-	      this.playerResources = 620
-	      this.enemyResources = 620
-	      this.frameCount = 0
-	      this.reinforceTimer = 1800
+      this.isPaused = true
       this.drawOverlay()
       this.drawPath()
-      this.battleState = 'running'
+      this.drawUi()
+      return
     }
 
     if (this.selectedUnits.length > 0 || this.dragState?.moved) {
@@ -2557,10 +2662,9 @@ export class PixiRts {
     this.aiDecisionTimer -= delta
     if (this.aiDecisionTimer > 0) return
 
-    this.aiIntent.player = this.evaluateStrategicIntent('player')
     this.aiIntent.enemy = this.evaluateStrategicIntent('enemy')
-    this.executeStrategicIntent('player')
     this.executeStrategicIntent('enemy')
+    this.aiIntent.player.lastAction = '玩家控制'
     this.aiDecisionTimer = 96
   }
 
@@ -2569,32 +2673,25 @@ export class PixiRts {
     const genome = genomes[this.aiGenomeIndex % Math.max(1, genomes.length)]
     this.aiGenomeIndex++
     const outputs = genome?.forward(this.strategicInputs(team)) ?? []
-    const shaped = (index: number, fallback: number) => {
+    const shaped = (index: number) => {
       const raw = Number(outputs[index])
-      if (!Number.isFinite(raw)) return fallback
+      if (!Number.isFinite(raw)) return undefined
       return Math.max(0.05, Math.min(0.95, (raw + 1) * 0.5))
     }
-    const current = this.aiIntent[team]
-    const resources = this.resourcesFor(team)
-    const builders = this.teamBuilders(team).length
-    const factories = this.teamStructures(team, 'factory').length
-    const extractors = this.teamStructures(team, 'extractor').length
-    const base = team === 'player' ? this.playerBase : this.enemyBase
-
-    const intent = {
-      economy: Math.max(shaped(0, current.economy), builders < 2 ? 0.86 : 0, extractors < 2 ? 0.72 : 0),
-      production: Math.max(shaped(1, current.production), factories < 1 ? 0.68 : 0),
-      defense: Math.max(shaped(2, current.defense), base.hp / base.maxHp < 0.65 ? 0.86 : 0),
-      attack: shaped(3, current.attack),
-      air: shaped(4, current.air),
-      tech: Math.max(shaped(5, current.tech), resources > 230 ? 0.58 : 0),
-      lastAction: current.lastAction,
+    const neuralBias: StrategicAiBias = {
+      economy: shaped(0),
+      production: shaped(1),
+      defense: shaped(2),
+      attack: shaped(3),
+      air: shaped(4),
+      tech: shaped(5),
     }
-
-    return intent
+    const current = this.aiIntent[team]
+    const plan = evaluateStrategicAi(this.strategicSnapshot(team), neuralBias)
+    return { ...plan, lastAction: current.lastAction }
   }
 
-  private strategicInputs(team: Team) {
+  private strategicSnapshot(team: Team): StrategicAiSnapshot {
     const enemy: Team = team === 'player' ? 'enemy' : 'player'
     const base = team === 'player' ? this.playerBase : this.enemyBase
     const enemyBase = team === 'player' ? this.enemyBase : this.playerBase
@@ -2606,15 +2703,47 @@ export class PixiRts {
       Math.hypot(unit.x - this.targetX(base), unit.y - this.targetY(base)) < 260
     )).length
 
+    const controlledNodes = this.resourceNodes.filter((node) => node.controller === team).length
+    const frontlinePressure = this.units.filter((unit) => (
+      !unit.dead &&
+      unit.team === enemy &&
+      Math.hypot(unit.x - this.targetX(base), unit.y - this.targetY(base)) < 520
+    )).length / 8
+
+    return {
+      resources: this.resourcesFor(team),
+      income: this.displayedIncome(team),
+      unitCount: alive,
+      unitCap: this.unitCap(team, 20),
+      enemyUnitCount: enemyAlive,
+      enemyUnitCap: this.unitCap(enemy, 20),
+      baseHealth: base.hp / Math.max(1, base.maxHp),
+      enemyBaseHealth: enemyBase.hp / Math.max(1, enemyBase.maxHp),
+      controlledNodes,
+      totalNodes: this.resourceNodes.length,
+      extractors: this.completedTeamStructures(team, 'extractor').length,
+      factories: this.completedTeamStructures(team, 'factory').length,
+      airfields: this.completedTeamStructures(team, 'airfield').length,
+      turrets: this.completedTeamStructures(team, 'turret').length,
+      repairStations: this.completedTeamStructures(team, 'repair').length,
+      radars: this.completedTeamStructures(team, 'radar').length,
+      enemyNearBase,
+      frontlinePressure: Math.min(1, frontlinePressure),
+      elapsedFrames: this.frameCount,
+    }
+  }
+
+  private strategicInputs(team: Team) {
+    const snapshot = this.strategicSnapshot(team)
     return [
-      Math.min(1, this.resourcesFor(team) / 420),
-      alive / Math.max(1, this.unitCap(team, 20)),
-      enemyAlive / Math.max(1, this.unitCap(enemy, 20)),
-      base.hp / base.maxHp,
-      enemyBase.hp / enemyBase.maxHp,
-      this.resourceNodes.filter((node) => node.controller === team).length / Math.max(1, this.resourceNodes.length),
-      this.teamStructures(team, 'factory').length / 3,
-      Math.min(1, enemyNearBase / 8),
+      Math.min(1, snapshot.resources / 420),
+      snapshot.unitCount / Math.max(1, snapshot.unitCap),
+      snapshot.enemyUnitCount / Math.max(1, snapshot.enemyUnitCap),
+      snapshot.baseHealth,
+      snapshot.enemyBaseHealth,
+      snapshot.controlledNodes / Math.max(1, snapshot.totalNodes),
+      snapshot.factories / 3,
+      Math.min(1, snapshot.enemyNearBase / 8),
     ]
   }
 
@@ -2634,7 +2763,7 @@ export class PixiRts {
 	    if (base.production || this.resourcesFor(team) < this.unitCost('engineer')) return
 	    const reserve = this.economyBuildReserve(team)
 	    if (builders > 0 && this.resourcesFor(team) - reserve < Math.min(this.unitCost('engineer'), this.unitCost('tank'))) return
-	    const desiredBuilders = intent.economy > 0.68 ? 4 : 3
+    const desiredBuilders = intent.desiredBuilders
 	    if (builders < desiredBuilders) {
 	      if (this.queueBaseProduction(team, 'engineer')) intent.lastAction = '基地生产工程师'
 	      return
@@ -2665,13 +2794,13 @@ export class PixiRts {
 	    const damagedUnits = this.units.some((unit) => !unit.dead && unit.team === team && unit.hp < unit.maxHp * 0.55)
 	
 	    const plan: StructureKind[] = []
-	    const desiredExtractors = Math.min(this.resourceNodes.length, factoryTotal < 1 ? 2 : 4)
+    const desiredExtractors = Math.min(this.resourceNodes.length, intent.desiredExtractors)
 	    if (intent.economy > 0.45 && extractorTotal < desiredExtractors && extractorSlotsTaken < this.resourceNodes.length) plan.push('extractor')
 	    if (unprotectedExtractor && turretCount < extractorCount + 2) plan.push('turret')
 	    if ((repairlessExtractor || damagedUnits) && repairCount < Math.max(1, Math.min(3, extractorCount))) plan.push('repair')
-	    if (factoryCount < 1 && factoryTotal < 1 && extractorCount >= 1 && this.resourcesFor(team) >= this.structureCost('factory') * 0.8) plan.push('factory')
-	    if (intent.production > 0.52 && factoryTotal < 2) plan.push('factory')
-	    if (intent.air > 0.55 && factoryCount > 0 && airfieldTotal < 1) plan.push('airfield')
+    if (factoryCount < 1 && factoryTotal < 1 && extractorCount >= 1 && this.resourcesFor(team) >= this.structureCost('factory') * 0.8) plan.push('factory')
+    if (intent.production > 0.52 && factoryTotal < intent.desiredFactories) plan.push('factory')
+    if (intent.air > 0.55 && factoryCount > 0 && airfieldTotal < intent.desiredAirfields) plan.push('airfield')
 	    if ((intent.defense > 0.58 || damagedUnits) && repairCount < 2) plan.push('repair')
     if (intent.defense > 0.48 && turretCount < Math.max(4, extractorCount + 1)) plan.push('turret')
     if (intent.tech > 0.55 && radarCount < 1) plan.push('radar')
@@ -2803,8 +2932,8 @@ export class PixiRts {
     return undefined
   }
 
-	  private commandCombatGroups(team: Team, intent: AiIntent) {
-	    if (intent.attack < 0.58 && intent.defense < 0.62) return
+  private commandCombatGroups(team: Team, intent: AiIntent) {
+    if (intent.attack < 0.58 && intent.defense < 0.62 && intent.phase !== 'defend' && intent.phase !== 'recover') return
 	    const base = team === 'player' ? this.playerBase : this.enemyBase
 	    const enemy: Team = team === 'player' ? 'enemy' : 'player'
 	    const enemyNearBase = this.units.some((unit) => (
@@ -2812,7 +2941,7 @@ export class PixiRts {
 	      unit.team === enemy &&
 	      Math.hypot(unit.x - this.targetX(base), unit.y - this.targetY(base)) < 310
 	    ))
-	    if (this.frameCount < 3200 && !enemyNearBase) return
+    if (this.frameCount < 1800 && !enemyNearBase && intent.phase !== 'defend') return
 	    const combatUnits = this.units.filter((unit) => (
 	      !unit.dead &&
 	      unit.team === team &&
@@ -2822,12 +2951,14 @@ export class PixiRts {
 	    ))
 	    if (combatUnits.length < 4) return
 	
-	    const enemyBase = team === 'player' ? this.enemyBase : this.playerBase
+    const enemyBase = team === 'player' ? this.enemyBase : this.playerBase
     const defendCell = { x: base.x + (team === 'player' ? 5 : -5), y: base.y }
-    const attackTarget = this.pickStrategicAttackCell(team) ?? { x: enemyBase.x, y: enemyBase.y }
-    const goal = intent.defense > intent.attack + 0.18 ? defendCell : attackTarget
+    const attackTarget = this.pickStrategicAttackCell(team, intent) ?? { x: enemyBase.x, y: enemyBase.y }
+    const goal = intent.phase === 'defend' || intent.phase === 'recover' || intent.defense > intent.attack + 0.18
+      ? defendCell
+      : attackTarget
 
-    for (const [index, unit] of combatUnits.slice(0, 12).entries()) {
+    for (const [index, unit] of combatUnits.slice(0, Math.max(4, intent.attackWave)).entries()) {
       const offset = {
         x: goal.x + (index % 4) - 1,
         y: goal.y + Math.floor(index / 4) - 1,
@@ -2838,12 +2969,21 @@ export class PixiRts {
     intent.lastAction = intent.defense > intent.attack + 0.18 ? '部队回防基地' : '部队推进攻击'
   }
 
-  private pickStrategicAttackCell(team: Team) {
+  private pickStrategicAttackCell(team: Team, intent: AiIntent) {
     const enemy: Team = team === 'player' ? 'enemy' : 'player'
+    if (intent.targetPriority === 'base') {
+      const base = team === 'player' ? this.enemyBase : this.playerBase
+      return { x: base.x, y: base.y }
+    }
     const target = this.structures
       .filter((structure) => !structure.dead && structure.team === enemy)
       .sort((a, b) => {
-	        const weight = (kind: StructureKind) => kind === 'extractor' ? 0 : kind === 'factory' ? 1 : kind === 'airfield' ? 2 : kind === 'turret' ? 3 : 4
+        const priority = intent.targetPriority
+        const weight = (kind: StructureKind) => {
+          if (kind === priority) return -1
+          if (priority === 'defense' && kind === 'turret') return -1
+          return kind === 'extractor' ? 0 : kind === 'factory' ? 1 : kind === 'airfield' ? 2 : kind === 'turret' ? 3 : 4
+        }
         return weight(a.kind) - weight(b.kind)
       })[0]
     return target ? this.pixelToCell(target.x, target.y) : undefined
@@ -2906,8 +3046,30 @@ export class PixiRts {
     return '炮塔'
   }
 
-	  private maybeRetreatForRepair(unit: RtsUnit) {
-	    if (unit.def.builder || unit.hp > unit.maxHp * 0.28) return false
+  private aiPhaseLabel(phase: AiIntent['phase']) {
+    const labels: Record<AiIntent['phase'], string> = {
+      opening: '开局',
+      expand: '扩张',
+      tech: '科技',
+      defend: '防守',
+      assault: '进攻',
+      recover: '恢复',
+    }
+    return labels[phase]
+  }
+
+  private mapModeLabel(mode: MapMode) {
+    const labels: Record<MapMode, string> = {
+      frontier: '边境',
+      highlands: '高地',
+      archipelago: '群岛',
+    }
+    return labels[mode]
+  }
+
+  private maybeRetreatForRepair(unit: RtsUnit) {
+    const retreatHealth = unit.team === 'enemy' ? this.aiIntent.enemy.retreatHealth : 0.28
+    if (unit.def.builder || unit.hp > unit.maxHp * retreatHealth) return false
 	    if (unit.commandUntil > 0 && unit.team === 'player') return false
 
     const repair = this.teamStructures(unit.team, 'repair')
@@ -3204,7 +3366,8 @@ export class PixiRts {
     }
 
 	    unit.pendingWeapon = undefined
-	    if (!target && !unit.def.builder && this.frameCount < 3200) return
+    if (!target && unit.team === 'player' && !unit.def.builder) return
+    if (!target && !unit.def.builder && this.frameCount < 1800) return
 	
 	    if (unit.team === 'enemy' || unit.commandUntil <= 0) {
       if (unit.aiCooldown <= 0 && unit.pathIndex >= unit.path.length) {
@@ -4042,6 +4205,8 @@ export class PixiRts {
       return
     }
 
+    if (structure.team === 'player') return
+
     if (structure.attackCooldown > 0) return
 
     const alive = this.units.filter((unit) => unit.team === structure.team && !unit.dead).length
@@ -4094,29 +4259,38 @@ export class PixiRts {
 	      : this.chooseFactoryRole(structure.team)
 	  }
 	
-	  private chooseAirfieldRole(team: Team): UnitRole | undefined {
-	    const resources = this.resourcesFor(team)
-	    const roles: UnitRole[] = resources > 230
-	      ? ['bomber', 'gunship', 'heavyInterceptor', 'fireBee']
-	      : resources > 135
-	        ? ['helicopter', 'gunship', 'interceptor']
-	        : ['spyDrone', 'interceptor']
+  private chooseAirfieldRole(team: Team): UnitRole | undefined {
+    const resources = this.resourcesFor(team)
+    const intent = this.aiIntent[team]
+    const roles: UnitRole[] = intent.phase === 'assault' && resources > 230
+      ? ['bomber', 'fireBee', 'heavyInterceptor', 'gunship']
+      : intent.phase === 'defend' || intent.phase === 'recover'
+        ? ['heavyInterceptor', 'interceptor', 'helicopter', 'spyDrone']
+        : resources > 230
+          ? ['bomber', 'gunship', 'heavyInterceptor', 'fireBee']
+          : resources > 135
+            ? ['helicopter', 'gunship', 'interceptor']
+            : ['spyDrone', 'interceptor']
 	    return roles.find((role) => this.resourcesFor(team) >= this.unitCost(role)) ?? roles[roles.length - 1]
 	  }
 	
-	  private chooseFactoryRole(team: Team): UnitRole {
-	    const resources = this.resourcesFor(team)
-	    const intent = this.aiIntent[team]
-	    if (intent.defense > 0.7 && resources > 95) {
-	      const roles: UnitRole[] = ['missile', 'laser', 'plasma', 'tank']
-	      return roles[Math.floor(this.random() * roles.length)]
-    }
-    if (resources > 245) {
-      const roles: UnitRole[] = ['mammoth', 'missile', 'laser', 'heavyArtillery']
+  private chooseFactoryRole(team: Team): UnitRole {
+    const resources = this.resourcesFor(team)
+    const intent = this.aiIntent[team]
+    if ((intent.phase === 'defend' || intent.phase === 'recover') && resources > 95) {
+      const roles: UnitRole[] = ['missile', 'laser', 'plasma', 'heavyArtillery']
       return roles[Math.floor(this.random() * roles.length)]
-	    }
-	    if (resources > 145) {
-	      const roles: UnitRole[] = ['plasma', 'missile', 'laser', 'artillery']
+    }
+    if (intent.phase === 'assault' && resources > 245) {
+      const roles: UnitRole[] = ['experimental', 'mammoth', 'missile', 'heavyArtillery']
+      return roles[Math.floor(this.random() * roles.length)]
+    }
+    if (intent.tech > 0.7 && resources > 240) {
+      const roles: UnitRole[] = ['experimental', 'mammoth', 'laser', 'heavyArtillery']
+      return roles[Math.floor(this.random() * roles.length)]
+    }
+    if (resources > 145) {
+      const roles: UnitRole[] = ['plasma', 'missile', 'laser', 'artillery']
 	      return roles[Math.floor(this.random() * roles.length)]
 	    }
 	    return 'plasma'
@@ -4313,6 +4487,7 @@ export class PixiRts {
     unit.pathIndex = 0
     unit.target = undefined
     unit.container.alpha = 0.34
+    if (unit.def.deadTexture) unit.sprite.texture = unit.def.deadTexture
     unit.sprite.tint = 0x656565
     unit.sprite.rotation += (this.random() - 0.5) * 1.2
     if (unit.turret) unit.turret.tint = 0x656565
@@ -4737,16 +4912,31 @@ export class PixiRts {
   }
 
   private handleUiClick(event: PointerEvent) {
-    if (this.app.screen.width < 760) return false
     const point = this.eventToCanvasPoint(event)
+    if (!point) return false
+
+    if (this.battleState !== 'running') {
+      if (
+        point.x >= this.matchRestartRect.x &&
+        point.x <= this.matchRestartRect.x + this.matchRestartRect.width &&
+        point.y >= this.matchRestartRect.y &&
+        point.y <= this.matchRestartRect.y + this.matchRestartRect.height
+      ) {
+        this.rebuildWorld()
+      }
+      return true
+    }
+
+    if (this.app.screen.width < 760) return false
     if (!point || point.x < this.getViewportWidth()) return false
 
     const sidebarX = this.getViewportWidth()
     const cardX = sidebarX + 16
     const cardW = Math.max(180, this.app.screen.width - sidebarX - 32)
-    const gridY = 388
+    const compactSidebar = this.app.screen.height < 720
+    const gridY = compactSidebar ? 414 : 458
     const buttonW = Math.floor((cardW - 16) / 3)
-    const buttonH = 23
+    const buttonH = compactSidebar ? 19 : 23
     const gap = 8
     const column = Math.floor((point.x - cardX) / (buttonW + gap))
     const row = Math.floor((point.y - gridY) / (buttonH + 4))
@@ -4807,6 +4997,60 @@ export class PixiRts {
     })
 
     this.uiBackground.clear()
+    const matchEnded = this.battleState !== 'running'
+    this.uiMatchPanel.visible = matchEnded
+    this.uiMatchResult.visible = matchEnded
+    this.uiMatchDetails.visible = matchEnded
+    this.uiMatchButton.visible = matchEnded
+    if (matchEnded) {
+      const panelWidth = Math.min(520, Math.max(280, width - 32))
+      const panelHeight = 220
+      const panelX = (width - panelWidth) / 2
+      const panelY = Math.max(24, (height - panelHeight) / 2)
+      const buttonWidth = Math.min(280, panelWidth - 48)
+      const buttonHeight = 42
+      const buttonX = (width - buttonWidth) / 2
+      const buttonY = panelY + panelHeight - 62
+      this.matchRestartRect = { x: buttonX, y: buttonY, width: buttonWidth, height: buttonHeight }
+      this.uiMatchPanel.clear()
+      this.uiMatchPanel.beginFill(0x081018, 0.97)
+      this.uiMatchPanel.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 12)
+      this.uiMatchPanel.endFill()
+      this.uiMatchPanel.lineStyle(2, this.battleState === 'playerWon' ? 0x67e8a5 : 0xff6b6b, 0.9)
+      this.uiMatchPanel.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 12)
+      this.uiMatchPanel.beginFill(0x16241d, 0.95)
+      this.uiMatchPanel.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 7)
+      this.uiMatchPanel.endFill()
+      this.uiMatchPanel.lineStyle(1, 0x8aa1ff, 0.8)
+      this.uiMatchPanel.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 7)
+      this.uiMatchResult.style = new TextStyle({
+        fill: this.battleState === 'playerWon' ? 0x67e8a5 : 0xff8a8a,
+        fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
+        fontSize: 32,
+        fontWeight: '800',
+        align: 'center',
+      })
+      this.uiMatchResult.position.set(width / 2, panelY + 52)
+      this.uiMatchResult.text = this.lastWinner
+      this.uiMatchDetails.position.set(width / 2, panelY + 110)
+      this.uiMatchDetails.style = new TextStyle({
+        fill: 0xcdd5f5,
+        fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
+        fontSize: 14,
+        lineHeight: 24,
+        align: 'center',
+      })
+      this.uiMatchDetails.position.set(width / 2, panelY + 112)
+      this.uiMatchResult.visible = true
+      this.uiMatchDetails.visible = true
+      this.uiMatchButton.position.set(width / 2, buttonY + buttonHeight / 2)
+      this.uiMatchButton.visible = true
+      this.uiMatchPanel.visible = true
+      this.uiMatchDetails.text = `第 ${Math.max(1, this.generation - 1)} 局结束\n点击下方按钮或按 Enter / R 开始新战局`
+    } else {
+      this.matchRestartRect = { x: 0, y: 0, width: 0, height: 0 }
+      this.uiMatchPanel.clear()
+    }
     this.uiTitle.visible = true
     this.uiTitle.style = new TextStyle({
       fill: 0x22ff55,
@@ -4835,16 +5079,17 @@ export class PixiRts {
       this.uiCommands.visible = true
       const cardX = sidebarX + 16
       const cardW = Math.max(180, sidebarWidth - 32)
+      const compactSidebar = height < 720
       this.uiBackground.beginFill(0x0f1a16, 0.72)
-      this.uiBackground.drawRect(cardX, 258, cardW, 112)
+      this.uiBackground.drawRect(cardX, 258, cardW, compactSidebar ? 154 : 190)
       this.uiBackground.endFill()
       this.uiBackground.lineStyle(1, 0x22ff55, 0.22)
-      this.uiBackground.drawRect(cardX, 258, cardW, 112)
+      this.uiBackground.drawRect(cardX, 258, cardW, compactSidebar ? 154 : 190)
       this.uiStats.style = new TextStyle({
         fill: 0xbfe8d0,
         fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
-        fontSize: 12,
-        lineHeight: 20,
+        fontSize: compactSidebar ? 11 : 12,
+        lineHeight: compactSidebar ? 15 : 18,
         wordWrap: true,
         wordWrapWidth: Math.max(170, sidebarWidth - 44),
       })
@@ -4856,15 +5101,15 @@ export class PixiRts {
         `资源点 ${controlledNodes}/${this.resourceNodes.length}  增援 ${Math.max(0, Math.ceil(this.reinforceTimer / 60))}s`,
         `基地 ${Math.ceil(this.playerBase.hp)}/${this.playerBase.maxHp}  ${baseProduction}`,
         `工厂 ${activeFactoryJobs}/${playerFactories.length}  空军 ${activeAirJobs}/${playerAirfields.length}`,
-        `AI ${this.aiIntent.player.lastAction}`,
+        `AI ${this.mapModeLabel(this.mapMode)}·${this.aiPhaseLabel(this.aiIntent.enemy.phase)} ${this.aiIntent.enemy.lastAction}`,
         `选中 ${selected}${this.selectedUnits.length > 1 ? `  血量 ${selectedPower}` : ''}`,
         this.stressMode ? '压测: 1000单位同屏' : '',
       ].filter(Boolean).join('\n')
 
       const gridX = cardX
-      const gridY = 388
+      const gridY = compactSidebar ? 414 : 458
       const buttonW = Math.floor((cardW - 16) / 3)
-      const buttonH = 23
+      const buttonH = compactSidebar ? 19 : 23
       for (let row = 0; row < commandLines.length; row++) {
         for (let col = 0; col < 3; col++) {
           const buttonX = gridX + col * (buttonW + 8)
@@ -4880,8 +5125,8 @@ export class PixiRts {
       this.uiCommands.style = new TextStyle({
         fill: 0x22ff55,
         fontFamily: 'Menlo, Consolas, monospace',
-        fontSize: 10,
-        lineHeight: 27,
+        fontSize: compactSidebar ? 9 : 10,
+        lineHeight: compactSidebar ? 23 : 27,
         wordWrap: false,
       })
       this.uiCommands.text = commandLines.join('\n')

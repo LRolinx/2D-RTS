@@ -2,7 +2,7 @@
   <div class="rts-shell">
     <header class="top-bar">
       <div>
-        <p class="eyebrow">NEAT TRAINING SIM</p>
+        <p class="eyebrow">HYBRID STRATEGY SIM</p>
         <h1>2D RTS</h1>
       </div>
       <div class="status-panel" aria-label="game controls">
