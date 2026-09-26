@@ -1458,6 +1458,11 @@ export class PixiRts {
   }
 
   private handlePointerDown = (event: PointerEvent) => {
+    if (event.button === 0 && this.handleUiClick(event)) {
+      event.preventDefault()
+      return
+    }
+
     const point = this.eventToBoardPoint(event)
 
     if (event.button === 1 || event.altKey) {
@@ -1571,6 +1576,12 @@ export class PixiRts {
     if (event.code === 'KeyR') {
       event.preventDefault()
       this.rebuildWorld()
+    }
+
+    if (event.code === 'Home') {
+      event.preventDefault()
+      this.focusCameraOnPlayerBase()
+      this.drawMinimap()
     }
 
     const production = PRODUCTION_BINDINGS.find((binding) => binding.code === event.code)
@@ -1865,10 +1876,7 @@ export class PixiRts {
     this.selectedCell = undefined
     this.activeBuilder = undefined
     this.dragState = undefined
-    this.projectiles = []
-    this.explosions = []
-    this.beams = []
-    this.effectLayer.removeChildren()
+    this.clearTransientVisuals()
     this.battleState = 'running'
 	    this.reinforceTimer = 1800
 	    this.playerResources = 620
@@ -1884,6 +1892,7 @@ export class PixiRts {
     this.unitSpatialHash.clear()
     this.pathReservations.clear()
     this.camera = { x: 0, y: 0, scale: 1 }
+    this.focusCameraOnPlayerBase()
     this.clampCamera()
     this.applyCamera()
     this.drawMap()
@@ -2122,17 +2131,30 @@ export class PixiRts {
   }
 
   private resetUnits() {
-    this.unitLayer.removeChildren()
-    this.wreckLayer.removeChildren()
+    this.destroyChildren(this.unitLayer)
+    this.destroyChildren(this.wreckLayer)
     this.units = []
     this.spawnArmy('player', this.startingUnitCount('player'))
     this.spawnArmy('enemy', this.startingUnitCount('enemy'))
   }
 
 	  private resetStructures() {
-	    this.structureLayer.removeChildren()
+	    this.destroyChildren(this.structureLayer)
 	    this.structures = []
-	  }
+  }
+
+  private destroyChildren(container: Container) {
+    for (const child of container.removeChildren()) {
+      child.destroy({ children: true })
+    }
+  }
+
+  private clearTransientVisuals() {
+    this.destroyChildren(this.effectLayer)
+    this.projectiles = []
+    this.explosions = []
+    this.beams = []
+  }
 
   private createStructure(team: Team, cell: GridPoint, kind: StructureKind): StructureState {
     const view = new Graphics()
@@ -2436,10 +2458,7 @@ export class PixiRts {
       this.enemyBase.production = undefined
       this.resetUnits()
       this.resetStructures()
-      this.projectiles = []
-      this.explosions = []
-      this.beams = []
-      this.effectLayer.removeChildren()
+      this.clearTransientVisuals()
 	      this.playerResources = 620
 	      this.enemyResources = 620
 	      this.frameCount = 0
@@ -4375,7 +4394,7 @@ export class PixiRts {
   }
 
   private drawTerrain() {
-    this.terrainLayer.removeChildren()
+    this.destroyChildren(this.terrainLayer)
 
     for (let x = 0; x < this.cols; x++) {
       for (let y = 0; y < this.rows; y++) {
@@ -4705,6 +4724,52 @@ export class PixiRts {
     return Math.round(rate * 60)
   }
 
+  private commandRows() {
+    return [
+      ...PRODUCTION_BINDINGS.map((binding) => `${binding.key} ${PRODUCTION_LABELS[binding.role]} ${this.unitCost(binding.role)}`),
+      `T 炮塔 ${this.structureCost('turret')}`,
+      `Y 采集 ${this.structureCost('extractor')}`,
+      `U 雷达 ${this.structureCost('radar')}`,
+      `I 维修 ${this.structureCost('repair')}`,
+      `O 工厂 ${this.structureCost('factory')}`,
+      `P 空军 ${this.structureCost('airfield')}`,
+    ]
+  }
+
+  private handleUiClick(event: PointerEvent) {
+    if (this.app.screen.width < 760) return false
+    const point = this.eventToCanvasPoint(event)
+    if (!point || point.x < this.getViewportWidth()) return false
+
+    const sidebarX = this.getViewportWidth()
+    const cardX = sidebarX + 16
+    const cardW = Math.max(180, this.app.screen.width - sidebarX - 32)
+    const gridY = 388
+    const buttonW = Math.floor((cardW - 16) / 3)
+    const buttonH = 23
+    const gap = 8
+    const column = Math.floor((point.x - cardX) / (buttonW + gap))
+    const row = Math.floor((point.y - gridY) / (buttonH + 4))
+    if (column < 0 || column > 2 || row < 0) return false
+
+    const buttonX = cardX + column * (buttonW + gap)
+    const buttonY = gridY + row * (buttonH + 4)
+    if (point.x > buttonX + buttonW || point.y > buttonY + buttonH) return false
+
+    const commandIndex = row * 3 + column
+    const commands = this.commandRows()
+    if (commandIndex >= commands.length) return false
+
+    if (commandIndex < PRODUCTION_BINDINGS.length) {
+      this.produceUnit(PRODUCTION_BINDINGS[commandIndex].role)
+    } else {
+      const structures: StructureKind[] = ['turret', 'extractor', 'radar', 'repair', 'factory', 'airfield']
+      this.buildStructureAtSelection(structures[commandIndex - PRODUCTION_BINDINGS.length])
+    }
+    this.drawUi()
+    return true
+  }
+
   private drawUi() {
     const width = this.app.screen.width
     const height = this.app.screen.height
@@ -4733,19 +4798,12 @@ export class PixiRts {
       : this.selectedCell
         ? `地块 ${this.selectedCell.x}, ${this.selectedCell.y}`
         : '无'
-    const commandRows = [
-      ...PRODUCTION_BINDINGS.map((binding) => `${binding.key} ${PRODUCTION_LABELS[binding.role]} ${this.unitCost(binding.role)}`),
-      `T 炮塔 ${this.structureCost('turret')}`,
-      `Y 采集 ${this.structureCost('extractor')}`,
-      `U 雷达 ${this.structureCost('radar')}`,
-      `I 维修 ${this.structureCost('repair')}`,
-      `O 工厂 ${this.structureCost('factory')}`,
-      `P 空军 ${this.structureCost('airfield')}`,
-    ]
-    const commandLines = Array.from({ length: Math.ceil(commandRows.length / 2) }, (_, index) => {
-      const left = commandRows[index * 2] ?? ''
-      const right = commandRows[index * 2 + 1] ?? ''
-      return `${left.padEnd(13, ' ')} ${right}`
+    const commandRows = this.commandRows()
+    const commandLines = Array.from({ length: Math.ceil(commandRows.length / 3) }, (_, index) => {
+      return commandRows
+        .slice(index * 3, index * 3 + 3)
+        .map((command) => command.padEnd(9, ' '))
+        .join(' ')
     })
 
     this.uiBackground.clear()
@@ -4805,10 +4863,10 @@ export class PixiRts {
 
       const gridX = cardX
       const gridY = 388
-      const buttonW = Math.floor((cardW - 8) / 2)
-      const buttonH = 27
+      const buttonW = Math.floor((cardW - 16) / 3)
+      const buttonH = 23
       for (let row = 0; row < commandLines.length; row++) {
-        for (let col = 0; col < 2; col++) {
+        for (let col = 0; col < 3; col++) {
           const buttonX = gridX + col * (buttonW + 8)
           const buttonY = gridY + row * (buttonH + 4)
           this.uiBackground.beginFill(0x16241d, 0.62)
@@ -4819,6 +4877,13 @@ export class PixiRts {
         }
       }
       this.uiCommands.position.set(gridX + 9, gridY + 8)
+      this.uiCommands.style = new TextStyle({
+        fill: 0x22ff55,
+        fontFamily: 'Menlo, Consolas, monospace',
+        fontSize: 10,
+        lineHeight: 27,
+        wordWrap: false,
+      })
       this.uiCommands.text = commandLines.join('\n')
     } else {
       this.uiStats.visible = false
@@ -4943,11 +5008,17 @@ export class PixiRts {
   }
 
   private eventToScreenPoint(event: PointerEvent | WheelEvent) {
+    const point = this.eventToCanvasPoint(event)
+    if (!point || point.x >= this.getViewportWidth()) return undefined
+    return point
+  }
+
+  private eventToCanvasPoint(event: PointerEvent | WheelEvent) {
     const rect = (this.app.view as HTMLCanvasElement).getBoundingClientRect()
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
 
-    if (x < 0 || y < 0 || x >= this.getViewportWidth() || y >= this.app.screen.height) return undefined
+    if (x < 0 || y < 0 || x >= this.app.screen.width || y >= this.app.screen.height) return undefined
     return { x, y }
   }
 
@@ -5052,6 +5123,15 @@ export class PixiRts {
   private applyCamera() {
     this.worldLayer.position.set(this.camera.x, this.camera.y)
     this.worldLayer.scale.set(this.camera.scale)
+  }
+
+  private focusCameraOnPlayerBase() {
+    const centerX = this.playerBase.x * GRID_SIZE + GRID_SIZE / 2
+    const centerY = this.playerBase.y * GRID_SIZE + GRID_SIZE / 2
+    this.camera.x = this.getViewportWidth() / 2 - centerX * this.camera.scale
+    this.camera.y = this.app.screen.height / 2 - centerY * this.camera.scale
+    this.clampCamera()
+    this.applyCamera()
   }
 
   private clampCamera() {

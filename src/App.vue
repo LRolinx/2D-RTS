@@ -9,12 +9,18 @@
         <span>框选编队</span>
         <span>右键移动</span>
         <span>滚轮缩放</span>
-        <span>生产建造</span>
+        <span>点按命令</span>
+        <span>Home 回基地</span>
         <span>战术 AI</span>
       </div>
     </header>
     <div ref="stageRef" class="game-stage" aria-label="2D RTS simulation canvas">
       <div v-show="isLoading" class="loading">正在部署战场...</div>
+      <div v-if="loadError" class="load-error" role="alert">
+        <strong>战场部署失败</strong>
+        <span>{{ loadError }}</span>
+        <button type="button" @click="reloadGame">重新部署</button>
+      </div>
     </div>
   </div>
 </template>
@@ -25,16 +31,36 @@ import type { PixiRts } from './examples/Rts/pixiRts'
 
 const stageRef = ref<HTMLElement>()
 const isLoading = ref(true)
+const loadError = ref('')
 let game: PixiRts | undefined
+let disposed = false
 
-onMounted(async () => {
+const loadGame = async () => {
   if (!stageRef.value) return
-  const { PixiRts } = await import('./examples/Rts/pixiRts')
-  game = new PixiRts(stageRef.value)
-  isLoading.value = false
+  isLoading.value = true
+  loadError.value = ''
+  try {
+    const { PixiRts } = await import('./examples/Rts/pixiRts')
+    if (disposed || !stageRef.value) return
+    game?.destroy()
+    game = new PixiRts(stageRef.value)
+    isLoading.value = false
+  } catch (error) {
+    isLoading.value = false
+    loadError.value = error instanceof Error ? error.message : '未知错误'
+  }
+}
+
+const reloadGame = () => {
+  void loadGame()
+}
+
+onMounted(() => {
+  void loadGame()
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   game?.destroy()
   game = undefined
 })
@@ -111,6 +137,31 @@ h1 {
   place-items: center;
   color: #9faaff;
   font-size: 14px;
+}
+
+.load-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: #ffd7d7;
+  text-align: center;
+  background: rgba(10, 13, 20, 0.86);
+}
+
+.load-error span {
+  max-width: 560px;
+  color: #f3b8b8;
+  font-size: 13px;
+}
+
+.load-error button {
+  border-color: rgba(138, 161, 255, 0.55);
+  color: #f2f5ff;
+  background: #1c2234;
 }
 
 @media (max-width: 720px) {
