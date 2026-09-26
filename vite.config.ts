@@ -5,6 +5,13 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   build: {
     chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          pixi: ['pixi.js'],
+        },
+      },
+    },
   },
   plugins: [vue()],
   define: {
