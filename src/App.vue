@@ -14,6 +14,7 @@
         <span>Ctrl+1-9 编队</span>
         <span>K/L/,/. 海军</span>
         <span>[ 船厂</span>
+        <span>4-6 科技</span>
         <span>战术 AI</span>
       </div>
     </header>

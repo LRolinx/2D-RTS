@@ -145,6 +145,16 @@ type ProductionJob = {
   duration: number
 }
 
+type ResearchKey = 'weapons' | 'armor' | 'logistics'
+
+type ResearchJob = {
+  key: ResearchKey
+  progress: number
+  duration: number
+}
+
+type TechState = Record<ResearchKey, number>
+
 type ConstructionJob = {
   builderId: number
   progress: number
@@ -602,6 +612,7 @@ export class PixiRts {
   private unitLayer = new Container()
   private effectLayer = new Container()
   private overlayLayer = new Graphics()
+  private fogLayer = new Graphics()
   private minimapLayer = new Graphics()
   private uiLayer = new Container()
   private uiBackground = new Graphics()
@@ -640,6 +651,12 @@ export class PixiRts {
   private reinforceTimer = 1800
   private playerResources = 520
   private enemyResources = 540
+  private tech: Record<Team, TechState> = {
+    player: { weapons: 0, armor: 0, logistics: 0 },
+    enemy: { weapons: 0, armor: 0, logistics: 0 },
+  }
+  private research?: ResearchJob
+  private enemyResearch?: ResearchJob
   private playerBase: BaseState = { team: 'player', x: 0, y: 0, hp: 1600, maxHp: 1600, productionQueue: [] }
   private enemyBase: BaseState = { team: 'enemy', x: 0, y: 0, hp: 1800, maxHp: 1800, productionQueue: [] }
   private rngSeed = 7
@@ -666,6 +683,7 @@ export class PixiRts {
   private mapRefreshTimer = 0
   private uiRefreshTimer = 0
   private minimapRefreshTimer = 0
+  private fogRefreshTimer = 0
   private unitDefs: Record<UnitRole, UnitDef> = {
     engineer: {
       role: 'engineer',
@@ -1275,6 +1293,7 @@ export class PixiRts {
     this.worldLayer.addChild(this.unitLayer as any)
     this.worldLayer.addChild(this.effectLayer as any)
     this.worldLayer.addChild(this.overlayLayer as any)
+    this.worldLayer.addChild(this.fogLayer as any)
     this.app.stage.addChild(this.worldLayer as any)
     this.uiLayer.addChild(
       this.uiBackground as any,
@@ -1848,6 +1867,17 @@ export class PixiRts {
       this.produceUnit(production.role)
     }
 
+    const researchByCode: Record<string, ResearchKey> = {
+      Digit4: 'weapons',
+      Digit5: 'armor',
+      Digit6: 'logistics',
+    }
+    const researchKey = researchByCode[event.code]
+    if (researchKey) {
+      event.preventDefault()
+      this.queueResearch('player', researchKey)
+    }
+
     if (event.code === 'KeyT') this.buildStructureAtSelection('turret')
     if (event.code === 'KeyY') this.buildStructureAtSelection('extractor')
 	    if (event.code === 'KeyU') this.buildStructureAtSelection('radar')
@@ -1933,6 +1963,70 @@ export class PixiRts {
 
   private productionSlotsUsed(producer: BaseState | StructureState) {
     return (producer.production ? 1 : 0) + producer.productionQueue.length
+  }
+
+  private researchLabel(key: ResearchKey) {
+    return key === 'weapons' ? '武器' : key === 'armor' ? '装甲' : '后勤'
+  }
+
+  private researchCost(team: Team, key: ResearchKey) {
+    return 170 + this.tech[team][key] * 120
+  }
+
+  private queueResearch(team: Team, key: ResearchKey) {
+    if (this.tech[team][key] >= 3) return false
+    if (team === 'player' ? this.research : this.enemyResearch) return false
+    const cost = this.researchCost(team, key)
+    if (!this.spendResources(team, cost)) return false
+    const job = { key, progress: 0, duration: 300 + this.tech[team][key] * 90 }
+    if (team === 'player') this.research = job
+    else this.enemyResearch = job
+    this.drawUi()
+    return true
+  }
+
+  private updateResearch(delta: number) {
+    if (delta <= 0) return
+    if (this.research) {
+      this.research.progress = Math.min(this.research.duration, this.research.progress + delta)
+      if (this.research.progress >= this.research.duration) {
+        this.completeResearch('player', this.research.key)
+        this.research = undefined
+      }
+    }
+
+    if (this.enemyResearch) {
+      this.enemyResearch.progress = Math.min(this.enemyResearch.duration, this.enemyResearch.progress + delta)
+      if (this.enemyResearch.progress >= this.enemyResearch.duration) {
+        this.completeResearch('enemy', this.enemyResearch.key)
+        this.enemyResearch = undefined
+      }
+    }
+
+    const intent = this.aiIntent.enemy
+    if (!this.enemyResearch && intent.tech > 0.62 && this.enemyResources > this.researchCost('enemy', 'weapons')) {
+      const key: ResearchKey = this.tech.enemy.weapons <= this.tech.enemy.armor ? 'weapons' : 'armor'
+      this.queueResearch('enemy', key)
+    }
+  }
+
+  private completeResearch(team: Team, key: ResearchKey) {
+    this.tech[team][key] = Math.min(3, this.tech[team][key] + 1)
+    for (const unit of this.units) {
+      if (unit.dead || unit.team !== team) continue
+      const oldRatio = unit.maxHp > 0 ? unit.hp / unit.maxHp : 1
+      unit.maxHp = this.unitMaxHp(team, unit.def)
+      unit.hp = Math.min(unit.maxHp, unit.maxHp * oldRatio)
+      unit.speed = this.unitSpeed(team, unit.def)
+    }
+  }
+
+  private unitMaxHp(team: Team, def: UnitDef) {
+    return def.hp * (1 + this.tech[team].armor * 0.1)
+  }
+
+  private unitSpeed(team: Team, def: UnitDef) {
+    return def.speed * (1 + this.tech[team].logistics * 0.05)
   }
 
   private buildStructureAtSelection(kind: StructureKind) {
@@ -2166,10 +2260,17 @@ export class PixiRts {
 	    this.reinforceTimer = 1800
 	    this.playerResources = 620
 	    this.enemyResources = 620
+    this.tech = {
+      player: { weapons: 0, armor: 0, logistics: 0 },
+      enemy: { weapons: 0, armor: 0, logistics: 0 },
+    }
+    this.research = undefined
+    this.enemyResearch = undefined
     this.frameCount = 0
     this.mapRefreshTimer = 0
     this.uiRefreshTimer = 0
     this.minimapRefreshTimer = 0
+    this.fogRefreshTimer = 0
     this.aiDecisionTimer = 0
     this.aiGenomeIndex = 0
     this.aiIntent.player = { ...createInitialStrategicAiPlan(), lastAction: '玩家控制' }
@@ -2185,6 +2286,7 @@ export class PixiRts {
     this.drawPath()
     this.drawUi()
     this.drawMinimap()
+    this.drawFog()
   }
 
   private createMap(terrain: TerrainType[][]) {
@@ -2615,15 +2717,16 @@ export class PixiRts {
     container.addChild(hpBar as any, flash as any)
     this.unitLayer.addChild(container as any)
 
+    const maxHp = this.unitMaxHp(team, def)
     const unit = {
       id: this.units.length + 1,
       team,
       def,
       x: start.x * GRID_SIZE + GRID_SIZE / 2,
       y: start.y * GRID_SIZE + GRID_SIZE / 2,
-      hp: def.hp,
-      maxHp: def.hp,
-      speed: def.speed,
+      hp: maxHp,
+      maxHp,
+      speed: this.unitSpeed(team, def),
       currentSpeed: 0,
       path: [],
       pathIndex: 0,
@@ -2709,6 +2812,7 @@ export class PixiRts {
     this.mapRefreshTimer -= delta
     this.uiRefreshTimer -= delta
     this.minimapRefreshTimer -= delta
+    this.fogRefreshTimer -= delta
 
     if (scaledDelta > 0) this.buildUnitSpatialHash()
 
@@ -2744,10 +2848,15 @@ export class PixiRts {
     this.updateExplosions(scaledDelta)
     this.updateBeams(scaledDelta)
     this.updateEconomy(scaledDelta)
+    this.updateResearch(scaledDelta)
     this.updateEngineerWork(scaledDelta)
     if (scaledDelta > 0 && this.mapRefreshTimer <= 0) {
       this.drawMap()
       this.mapRefreshTimer = this.units.length > 300 ? 12 : 5
+    }
+    if (scaledDelta > 0 && this.fogRefreshTimer <= 0) {
+      this.drawFog()
+      this.fogRefreshTimer = this.units.length > 300 ? 18 : 8
     }
 
     if (this.enemyBase.hp <= 0 || enemyAlive === 0) {
@@ -2783,8 +2892,8 @@ export class PixiRts {
   private updateEconomy(delta: number) {
     if (delta <= 0) return
 
-    this.playerResources += 0.035 * delta
-    this.enemyResources += 0.04 * delta
+    this.playerResources += 0.035 * (1 + this.tech.player.logistics * 0.08) * delta
+    this.enemyResources += 0.04 * (1 + this.tech.enemy.logistics * 0.08) * delta
     this.updateResourceControl(delta)
     this.updateStrategicAi(delta)
     this.reinforceTimer -= delta
@@ -4907,6 +5016,46 @@ export class PixiRts {
     }
   }
 
+  private drawFog() {
+    this.fogLayer.clear()
+    if (this.stressMode) return
+
+    const visible = new Uint8Array(this.cols * this.rows)
+    const reveal = (worldX: number, worldY: number, radius: number) => {
+      const centerX = Math.floor(worldX / GRID_SIZE)
+      const centerY = Math.floor(worldY / GRID_SIZE)
+      const radiusSquared = radius * radius
+      for (let x = centerX - radius; x <= centerX + radius; x++) {
+        for (let y = centerY - radius; y <= centerY + radius; y++) {
+          if (!this.isInside(x, y)) continue
+          const dx = x - centerX
+          const dy = y - centerY
+          if (dx * dx + dy * dy <= radiusSquared) visible[x * this.rows + y] = 1
+        }
+      }
+    }
+
+    reveal((this.playerBase.x + 0.5) * GRID_SIZE, (this.playerBase.y + 0.5) * GRID_SIZE, 12)
+    for (const unit of this.units) {
+      if (unit.dead || unit.team !== 'player') continue
+      const radius = unit.def.role === 'scout' ? 10 : unit.def.role === 'spyDrone' ? 15 : unit.def.flying ? 11 : 7
+      reveal(unit.x, unit.y, radius)
+    }
+    for (const structure of this.structures) {
+      if (structure.dead || structure.team !== 'player') continue
+      const radius = structure.kind === 'radar' ? Math.max(18, Math.round(structure.range / GRID_SIZE)) : structure.kind === 'seaFactory' ? 8 : 6
+      reveal(structure.x, structure.y, radius)
+    }
+
+    this.fogLayer.beginFill(0x02060a, 0.82)
+    for (let x = 0; x < this.cols; x++) {
+      for (let y = 0; y < this.rows; y++) {
+        if (!visible[x * this.rows + y]) this.fogLayer.drawRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE + 1, GRID_SIZE + 1)
+      }
+    }
+    this.fogLayer.endFill()
+  }
+
   private isWaterTerrain(terrain?: TerrainType) {
     return terrain === 'water' || terrain === 'deepWater' || terrain === 'shallowWater'
   }
@@ -5158,6 +5307,9 @@ export class PixiRts {
       `O 工厂 ${this.structureCost('factory')}`,
       `P 空军 ${this.structureCost('airfield')}`,
       `[ 船厂 ${this.structureCost('seaFactory')}`,
+      `4 武器研究 ${this.researchCost('player', 'weapons')}`,
+      `5 装甲研究 ${this.researchCost('player', 'armor')}`,
+      `6 后勤研究 ${this.researchCost('player', 'logistics')}`,
     ]
   }
 
@@ -5220,9 +5372,12 @@ export class PixiRts {
 
     if (commandIndex < PRODUCTION_BINDINGS.length) {
       this.produceUnit(PRODUCTION_BINDINGS[commandIndex].role)
-    } else {
+    } else if (commandIndex < PRODUCTION_BINDINGS.length + 7) {
       const structures: StructureKind[] = ['turret', 'extractor', 'radar', 'repair', 'factory', 'airfield', 'seaFactory']
       this.buildStructureAtSelection(structures[commandIndex - PRODUCTION_BINDINGS.length])
+    } else {
+      const research: ResearchKey[] = ['weapons', 'armor', 'logistics']
+      this.queueResearch('player', research[commandIndex - PRODUCTION_BINDINGS.length - 7])
     }
     this.drawUi()
     return true
@@ -5249,6 +5404,9 @@ export class PixiRts {
       : '空闲'
     const enemyBaseProduction = this.enemyBase.production
       ? `${PRODUCTION_LABELS[this.enemyBase.production.role]} ${Math.round((this.enemyBase.production.progress / this.enemyBase.production.duration) * 100)}%`
+      : '空闲'
+    const researchStatus = this.research
+      ? `${this.researchLabel(this.research.key)} ${Math.round((this.research.progress / this.research.duration) * 100)}%`
       : '空闲'
     const selectedPower = this.selectedUnits.reduce((sum, unit) => sum + Math.ceil(unit.hp), 0)
     const selected = this.selectedUnits.length === 1
@@ -5360,7 +5518,7 @@ export class PixiRts {
         fill: 0xbfe8d0,
         fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
         fontSize: ultraCompactSidebar ? 10 : compactSidebar ? 11 : 12,
-        lineHeight: ultraCompactSidebar ? 14 : compactSidebar ? 15 : 18,
+        lineHeight: ultraCompactSidebar ? 12 : compactSidebar ? 15 : 18,
         wordWrap: true,
         wordWrapWidth: Math.max(170, sidebarWidth - 44),
       })
@@ -5373,6 +5531,7 @@ export class PixiRts {
         `基地 ${Math.ceil(this.playerBase.hp)}/${this.playerBase.maxHp}  ${baseProduction}`,
         `工厂 ${activeFactoryJobs}/${playerFactories.length * 3}  空军 ${activeAirJobs}/${playerAirfields.length * 3}`,
         `船厂 ${activeSeaJobs}/${playerSeaFactories.length * 3}`,
+        `科技 武${this.tech.player.weapons} 装${this.tech.player.armor} 后${this.tech.player.logistics}  研究 ${researchStatus}`,
         `AI ${this.mapModeLabel(this.mapMode)}·${this.aiPhaseLabel(this.aiIntent.enemy.phase)} ${this.aiIntent.enemy.lastAction}`,
         `选中 ${selected}${this.selectedUnits.length > 1 ? `  血量 ${selectedPower}` : ''}`,
         this.stressMode ? '压测: 1000单位同屏' : '',
@@ -5743,7 +5902,12 @@ export class PixiRts {
         canAttackFlying: unit.def.canAttackFlying,
         canAttackLand: unit.def.canAttackLand,
       }]
-    return weapons.find((weapon) => this.canWeaponAttackTarget(weapon, target))
+    const weapon = weapons.find((candidate) => this.canWeaponAttackTarget(candidate, target))
+    if (!weapon) return undefined
+    return {
+      ...weapon,
+      damage: weapon.damage * (1 + this.tech[unit.team].weapons * 0.1),
+    }
   }
 
   private canWeaponAttackTarget(weapon: WeaponDef, target: CombatTarget) {
