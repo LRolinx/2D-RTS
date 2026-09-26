@@ -12,6 +12,8 @@
         <span>点按命令</span>
         <span>Home 回基地</span>
         <span>Ctrl+1-9 编队</span>
+        <span>K/L/,/. 海军</span>
+        <span>[ 船厂</span>
         <span>战术 AI</span>
       </div>
     </header>

@@ -49,6 +49,14 @@ import spyDroneImageUrl from '../../assets/units/spy_drone/base.png'
 import spyDroneDeadImageUrl from '../../assets/units/spy_drone/base_dead.png'
 import fireBeeImageUrl from '../../assets/units/fire_bee/body.png'
 import fireBeeDeadImageUrl from '../../assets/units/fire_bee/body_dead.png'
+import lightSubImageUrl from '../../assets/units/light_sub/base.png'
+import lightSubDeadImageUrl from '../../assets/units/light_sub/base_dead.png'
+import battleshipImageUrl from '../../assets/units/heavy_battleship/heavy_battleship.png'
+import battleshipDeadImageUrl from '../../assets/units/heavy_battleship/heavy_battleship_dead.png'
+import missileShipImageUrl from '../../assets/units/heavy_missile_ship/body.png'
+import missileShipDeadImageUrl from '../../assets/units/heavy_missile_ship/body_dead.png'
+import aaShipImageUrl from '../../assets/units/heavy_aa_ship/heavy_aa_ship.png'
+import aaShipDeadImageUrl from '../../assets/units/heavy_aa_ship/heavy_aa_ship_dead.png'
 import engineerImageUrl from '../../assets/units/combat_engineer/base.png'
 import engineerDeadImageUrl from '../../assets/units/combat_engineer/base_dead.png'
 import tankTurretImageUrl from '../../assets/units/test_tank/tank_turret.png'
@@ -96,6 +104,10 @@ import bomberIniRaw from '../../assets/units/bomber/bomber.ini?raw'
 import gunshipIniRaw from '../../assets/units/light_gunship/light_gunship.ini?raw'
 import spyDroneIniRaw from '../../assets/units/spy_drone/spy_drone.ini?raw'
 import fireBeeIniRaw from '../../assets/units/fire_bee/fire_bee.ini?raw'
+import lightSubIniRaw from '../../assets/units/light_sub/light_sub.ini?raw'
+import battleshipIniRaw from '../../assets/units/heavy_battleship/heavy_battleship.ini?raw'
+import missileShipIniRaw from '../../assets/units/heavy_missile_ship/heavy_missile_ship.ini?raw'
+import aaShipIniRaw from '../../assets/units/heavy_aa_ship/heavy_aa_ship.ini?raw'
 import extractorCommonIniRaw from '../../assets/units/extractor/extractor_common.ini?raw'
 import extractorIniRaw from '../../assets/units/extractor/extractor.ini?raw'
 import fabricatorIniRaw from '../../assets/units/fabricator/fabricatorT1.ini?raw'
@@ -124,7 +136,7 @@ type BaseState = {
   production?: ProductionJob
 }
 
-type StructureKind = 'turret' | 'extractor' | 'radar' | 'repair' | 'factory' | 'airfield'
+type StructureKind = 'turret' | 'extractor' | 'radar' | 'repair' | 'factory' | 'airfield' | 'seaFactory'
 
 type ProductionJob = {
   role: UnitRole
@@ -198,6 +210,10 @@ type UnitRole =
   | 'gunship'
   | 'spyDrone'
   | 'fireBee'
+  | 'lightSub'
+  | 'battleship'
+  | 'missileShip'
+  | 'aaShip'
 
 type UnitTurretPartDef = {
   texture: Texture
@@ -381,6 +397,10 @@ const PRODUCTION_BINDINGS: Array<{ code: string; key: string; role: UnitRole }> 
   { code: 'KeyV', key: 'V', role: 'gunship' },
   { code: 'KeyB', key: 'B', role: 'spyDrone' },
   { code: 'KeyN', key: 'N', role: 'fireBee' },
+  { code: 'KeyK', key: 'K', role: 'lightSub' },
+  { code: 'KeyL', key: 'L', role: 'battleship' },
+  { code: 'Comma', key: ',', role: 'missileShip' },
+  { code: 'Period', key: '.', role: 'aaShip' },
 ]
 const PRODUCTION_LABELS: Record<UnitRole, string> = {
   engineer: '工程',
@@ -400,6 +420,10 @@ const PRODUCTION_LABELS: Record<UnitRole, string> = {
   gunship: '炮艇',
   spyDrone: '无人机',
   fireBee: '火蜂',
+  lightSub: '潜艇',
+  battleship: '战列舰',
+  missileShip: '导弹舰',
+  aaShip: '防空舰',
 }
 const UNIT_ASSET_URLS = import.meta.glob([
   '../../assets/units/shared/*.{png,jpg,jpeg,webp}',
@@ -419,6 +443,10 @@ const UNIT_ASSET_URLS = import.meta.glob([
   '../../assets/units/light_gunship/*.{png,jpg,jpeg,webp}',
   '../../assets/units/spy_drone/*.{png,jpg,jpeg,webp}',
   '../../assets/units/fire_bee/*.{png,jpg,jpeg,webp}',
+  '../../assets/units/light_sub/*.{png,jpg,jpeg,webp}',
+  '../../assets/units/heavy_battleship/*.{png,jpg,jpeg,webp}',
+  '../../assets/units/heavy_missile_ship/*.{png,jpg,jpeg,webp}',
+  '../../assets/units/heavy_aa_ship/*.{png,jpg,jpeg,webp}',
 ], {
   eager: true,
   import: 'default',
@@ -442,6 +470,10 @@ const UNIT_ASSET_DIRS: Record<UnitRole, string> = {
   gunship: 'light_gunship',
   spyDrone: 'spy_drone',
   fireBee: 'fire_bee',
+  lightSub: 'light_sub',
+  battleship: 'heavy_battleship',
+  missileShip: 'heavy_missile_ship',
+  aaShip: 'heavy_aa_ship',
 }
 const createTileTexture = (url: string, x = 0, y = 0) => new Texture(
   Texture.from(url).baseTexture,
@@ -465,6 +497,10 @@ const UNIT_INI_RAW: Record<UnitRole, string> = {
   gunship: gunshipIniRaw,
   spyDrone: spyDroneIniRaw,
   fireBee: fireBeeIniRaw,
+  lightSub: lightSubIniRaw,
+  battleship: battleshipIniRaw,
+  missileShip: missileShipIniRaw,
+  aaShip: aaShipIniRaw,
 }
 const STRUCTURE_INI_RAW: Record<StructureKind, string[]> = {
   turret: [turretCommonIniRaw, turretIniRaw],
@@ -473,6 +509,7 @@ const STRUCTURE_INI_RAW: Record<StructureKind, string[]> = {
   repair: [fabricatorIniRaw],
   factory: [mechFactoryIniRaw],
   airfield: [outpostIniRaw],
+  seaFactory: [mechFactoryIniRaw],
 }
 const createSheetFrameTexture = (url: string, frameWidth: number, frameHeight: number, frame = 0) => new Texture(
   Texture.from(url).baseTexture,
@@ -539,6 +576,13 @@ const STRUCTURE_TEXTURES: Record<StructureKind, {
     turretWidth: 26,
     turretHeight: 26,
     turretOffsetY: -18,
+  },
+  seaFactory: {
+    body: Texture.from(mechFactoryTopImageUrl),
+    back: Texture.from(mechFactoryBottomImageUrl),
+    door: Texture.from(mechFactoryDoorImageUrl),
+    width: 64,
+    height: 72,
   },
 }
 const HQ_TEXTURE = Texture.from(hqBaseImageUrl)
@@ -1047,6 +1091,102 @@ export class PixiRts {
       height: 58,
       color: 0xff5d73,
       flying: true,
+    },
+    lightSub: {
+      role: 'lightSub',
+      name: '轻型潜艇',
+      texture: Texture.from(lightSubImageUrl),
+      deadTexture: Texture.from(lightSubDeadImageUrl),
+      frameWidth: 21,
+      frameHeight: 24,
+      frameCount: 1,
+      animationSpeed: 0,
+      cost: 115,
+      hp: 88,
+      speed: 0.72,
+      range: 138,
+      damage: 24,
+      cooldown: 74,
+      projectileSpeed: 4.2,
+      attackKind: 'missile',
+      projectileSize: 3,
+      width: 27,
+      height: 30,
+      color: 0x60a5fa,
+    },
+    battleship: {
+      role: 'battleship',
+      name: '重型战列舰',
+      texture: Texture.from(battleshipImageUrl),
+      deadTexture: Texture.from(battleshipDeadImageUrl),
+      frameWidth: 20,
+      frameHeight: 102,
+      frameCount: 1,
+      animationSpeed: 0,
+      cost: 280,
+      hp: 540,
+      speed: 0.52,
+      range: 270,
+      damage: 58,
+      cooldown: 112,
+      projectileSpeed: 4.2,
+      attackKind: 'artillery',
+      splashRadius: 42,
+      projectileSize: 5,
+      width: 34,
+      height: 82,
+      color: 0x93c5fd,
+      canAttackFlying: true,
+      canAttackLand: true,
+    },
+    missileShip: {
+      role: 'missileShip',
+      name: '远程导弹舰',
+      texture: Texture.from(missileShipImageUrl),
+      deadTexture: Texture.from(missileShipDeadImageUrl),
+      frameWidth: 42,
+      frameHeight: 83,
+      frameCount: 1,
+      animationSpeed: 0,
+      cost: 300,
+      hp: 420,
+      speed: 0.46,
+      range: 340,
+      damage: 64,
+      cooldown: 126,
+      projectileSpeed: 4.5,
+      attackKind: 'missile',
+      splashRadius: 48,
+      projectileSize: 5,
+      width: 46,
+      height: 76,
+      color: 0xf59e0b,
+      canAttackFlying: true,
+      canAttackLand: true,
+    },
+    aaShip: {
+      role: 'aaShip',
+      name: '防空护卫舰',
+      texture: Texture.from(aaShipImageUrl),
+      deadTexture: Texture.from(aaShipDeadImageUrl),
+      frameWidth: 40,
+      frameHeight: 68,
+      frameCount: 1,
+      animationSpeed: 0,
+      cost: 220,
+      hp: 360,
+      speed: 0.58,
+      range: 290,
+      damage: 44,
+      cooldown: 72,
+      projectileSpeed: 6.4,
+      attackKind: 'rapid',
+      projectileSize: 3,
+      width: 45,
+      height: 62,
+      color: 0x22d3ee,
+      canAttackFlying: true,
+      canAttackLand: false,
     },
   }
   private projectiles: Projectile[] = []
@@ -1712,6 +1852,7 @@ export class PixiRts {
 	    if (event.code === 'KeyI') this.buildStructureAtSelection('repair')
 	    if (event.code === 'KeyO') this.buildStructureAtSelection('factory')
 	    if (event.code === 'KeyP') this.buildStructureAtSelection('airfield')
+	    if (event.code === 'BracketLeft') this.buildStructureAtSelection('seaFactory')
     if (event.code === 'Digit1') this.setSimulationSpeed(0.5)
     if (event.code === 'Digit2') this.setSimulationSpeed(1)
     if (event.code === 'Digit3') this.setSimulationSpeed(2)
@@ -1739,7 +1880,11 @@ export class PixiRts {
 	      return
 	    }
 	
-	    const producerKind: StructureKind = this.isAirProducedRole(role) ? 'airfield' : 'factory'
+    const producerKind: StructureKind = this.isAirProducedRole(role)
+      ? 'airfield'
+      : this.isWaterProducedRole(role)
+        ? 'seaFactory'
+        : 'factory'
 	    const producer = this.completedTeamStructures('player', producerKind)
 	      .filter((structure) => !structure.production)
 	      .sort((a, b) => a.attackCooldown - b.attackCooldown)[0]
@@ -1750,12 +1895,16 @@ export class PixiRts {
 	    return role === 'engineer' || role === 'scout' || role === 'tank'
 	  }
 	
-	  private isAirProducedRole(role: UnitRole) {
-	    return this.unitDefs[role].flying === true
-	  }
-	
-	  private isFactoryProducedRole(role: UnitRole) {
-	    return !this.isBaseProducedRole(role) && !this.isAirProducedRole(role)
+  private isAirProducedRole(role: UnitRole) {
+    return this.unitDefs[role].flying === true
+  }
+
+  private isWaterProducedRole(role: UnitRole) {
+    return this.movementLayer(this.unitDefs[role]) === 'water'
+  }
+
+  private isFactoryProducedRole(role: UnitRole) {
+    return !this.isBaseProducedRole(role) && !this.isAirProducedRole(role) && !this.isWaterProducedRole(role)
 	  }
 
 	  private queueBaseProduction(team: Team, role: UnitRole) {
@@ -1797,7 +1946,8 @@ export class PixiRts {
 	    if (kind === 'radar') return 90
 	    if (kind === 'repair') return 130
 	    if (kind === 'factory') return 220
-	    if (kind === 'airfield') return 210
+    if (kind === 'airfield') return 210
+    if (kind === 'seaFactory') return 245
 	    return 140
 	  }
 
@@ -1837,7 +1987,12 @@ export class PixiRts {
   }
 
 	  private isBuildCellOpen(cell: GridPoint, kind: StructureKind = 'turret') {
-	    if (!this.isCellPassable(cell.x, cell.y)) return false
+	    if (kind === 'seaFactory') {
+      if (!this.isWaterTerrain(this.terrainMap[cell.x]?.[cell.y])) return false
+      if (!this.hasNearbyLand(this.terrainMap, cell.x, cell.y, 1)) return false
+    } else if (!this.isCellPassable(cell.x, cell.y)) {
+      return false
+	    }
 	    const x = cell.x * GRID_SIZE + GRID_SIZE / 2
 	    const y = cell.y * GRID_SIZE + GRID_SIZE / 2
 	    const occupied = this.structures.some((structure) => !structure.dead && Math.hypot(structure.x - x, structure.y - y) < GRID_SIZE * 2)
@@ -2307,7 +2462,7 @@ export class PixiRts {
     const configuredDamage = this.iniProjectileDamage(projectile)
 	    const hp = configuredHp
 	      ? this.normalizeStructureHp(configuredHp)
-	      : kind === 'factory' ? 420 : kind === 'airfield' ? 360 : kind === 'repair' ? 300 : kind === 'extractor' ? 220 : kind === 'radar' ? 180 : 260
+	      : kind === 'factory' ? 420 : kind === 'airfield' ? 360 : kind === 'seaFactory' ? 440 : kind === 'repair' ? 300 : kind === 'extractor' ? 220 : kind === 'radar' ? 180 : 260
     const structure = {
       id: this.structures.length + 1,
       team,
@@ -2316,9 +2471,9 @@ export class PixiRts {
       y: cell.y * GRID_SIZE + GRID_SIZE / 2,
       hp,
       maxHp: hp,
-	      range: configuredRange ?? (kind === 'radar' ? 390 : kind === 'repair' ? 150 : kind === 'factory' || kind === 'airfield' ? 0 : 210),
+	      range: configuredRange ?? (kind === 'radar' ? 390 : kind === 'repair' ? 150 : kind === 'factory' || kind === 'airfield' || kind === 'seaFactory' ? 0 : 210),
 	      damage: kind === 'turret' ? configuredDamage ?? 18 : 0,
-	      cooldown: configuredDelay ?? (kind === 'factory' ? 420 : kind === 'airfield' ? 460 : kind === 'repair' ? 36 : kind === 'radar' ? 90 : 42),
+	      cooldown: configuredDelay ?? (kind === 'factory' ? 420 : kind === 'airfield' ? 460 : kind === 'seaFactory' ? 500 : kind === 'repair' ? 36 : kind === 'radar' ? 90 : 42),
       attackCooldown: 18,
       canAttackFlying: attack.canattackflyingunits === undefined ? undefined : this.iniBoolean(attack.canattackflyingunits),
       canAttackLand: attack.canattacklandunits === undefined ? undefined : this.iniBoolean(attack.canattacklandunits),
@@ -2338,7 +2493,9 @@ export class PixiRts {
 
   private addStructureSprites(structure: StructureState) {
     const config = STRUCTURE_TEXTURES[structure.kind]
-    const tint = structure.team === 'player' ? 0xe3fff0 : 0xffd7d7
+    const tint = structure.kind === 'seaFactory'
+      ? structure.team === 'player' ? 0xa9ddff : 0xffb4c3
+      : structure.team === 'player' ? 0xe3fff0 : 0xffd7d7
 
     if (config.back) {
       const back = new Sprite(config.back)
@@ -2653,6 +2810,7 @@ export class PixiRts {
 	    const openResourceSlot = this.resourceNodes.some((node) => node.amount > 0 && !this.resourceHasExtractor(node))
 	    if (!hasExtractor && openResourceSlot) reserve += this.structureCost('extractor')
 	    if (this.teamStructures(team, 'factory').length === 0) reserve += this.structureCost('factory')
+	    if (this.hasWaterAccess(team) && this.teamStructures(team, 'seaFactory').length === 0) reserve += this.structureCost('seaFactory') * 0.45
 	    return reserve
 	  }
 
@@ -2811,6 +2969,7 @@ export class PixiRts {
 	    const factoryCount = this.completedTeamStructures(team, 'factory').length
 	    const factoryTotal = this.teamStructures(team, 'factory').length
 	    const airfieldTotal = this.teamStructures(team, 'airfield').length
+	    const seaFactoryTotal = this.teamStructures(team, 'seaFactory').length
 	    const turretCount = this.teamStructures(team, 'turret').length
 	    const repairCount = this.teamStructures(team, 'repair').length
 	    const radarCount = this.teamStructures(team, 'radar').length
@@ -2826,6 +2985,7 @@ export class PixiRts {
     if (factoryCount < 1 && factoryTotal < 1 && extractorCount >= 1 && this.resourcesFor(team) >= this.structureCost('factory') * 0.8) plan.push('factory')
     if (intent.production > 0.52 && factoryTotal < intent.desiredFactories) plan.push('factory')
     if (intent.air > 0.55 && factoryCount > 0 && airfieldTotal < intent.desiredAirfields) plan.push('airfield')
+	    if (intent.tech > 0.46 && seaFactoryTotal < 1 && this.hasWaterAccess(team)) plan.push('seaFactory')
 	    if ((intent.defense > 0.58 || damagedUnits) && repairCount < 2) plan.push('repair')
     if (intent.defense > 0.48 && turretCount < Math.max(4, extractorCount + 1)) plan.push('turret')
     if (intent.tech > 0.55 && radarCount < 1) plan.push('radar')
@@ -2875,12 +3035,41 @@ export class PixiRts {
 
     const base = team === 'player' ? this.playerBase : this.enemyBase
     const forward = team === 'player' ? 1 : -1
+    if (kind === 'seaFactory') {
+      const waterCell = this.findClosestWaterBuildCell({ x: base.x + forward * 10, y: base.y })
+      return waterCell ? this.findOpenBuildCellAround(waterCell, kind) : undefined
+    }
     const resourceAnchor = this.resourceSupportAnchor(team, kind)
     const anchor = resourceAnchor ?? {
       x: base.x + forward * (kind === 'turret' ? 6 : kind === 'factory' ? 7 : kind === 'airfield' ? 9 : 4),
       y: base.y + (kind === 'repair' ? 5 : kind === 'radar' ? -6 : kind === 'airfield' ? -5 : 0),
     }
     return this.findOpenBuildCellAround(anchor, kind)
+  }
+
+  private hasWaterAccess(team: Team) {
+    const base = team === 'player' ? this.playerBase : this.enemyBase
+    return Boolean(this.findClosestWaterBuildCell({ x: base.x, y: base.y }))
+  }
+
+  private findClosestWaterBuildCell(origin: GridPoint) {
+    let best: GridPoint | undefined
+    let bestDistance = Number.POSITIVE_INFINITY
+    for (let radius = 0; radius <= 34; radius++) {
+      for (let x = origin.x - radius; x <= origin.x + radius; x++) {
+        for (let y = origin.y - radius; y <= origin.y + radius; y++) {
+          if (!this.isInside(x, y) || !this.isWaterTerrain(this.terrainMap[x]?.[y])) continue
+          if (!this.hasNearbyLand(this.terrainMap, x, y, 1)) continue
+          const distance = Math.hypot(x - origin.x, y - origin.y)
+          if (distance < bestDistance) {
+            best = { x, y }
+            bestDistance = distance
+          }
+        }
+      }
+      if (best) return best
+    }
+    return undefined
   }
 
   private resourceExpansionScore(team: Team, builder: RtsUnit, node: ResourceNode) {
@@ -2908,6 +3097,7 @@ export class PixiRts {
     if (kind === 'radar') return { x: cell.x + side * 2, y: cell.y - 4 }
     if (kind === 'factory') return { x: cell.x + side * 5, y: cell.y + 5 }
     if (kind === 'airfield') return { x: cell.x + side * 7, y: cell.y - 5 }
+    if (kind === 'seaFactory') return { x: cell.x + side * 5, y: cell.y + 4 }
     return cell
   }
 
@@ -3066,6 +3256,7 @@ export class PixiRts {
     if (kind === 'extractor') return '采集器'
 	    if (kind === 'factory') return '工厂'
 	    if (kind === 'airfield') return '空军基地'
+    if (kind === 'seaFactory') return '船厂'
     if (kind === 'repair') return '维修站'
     if (kind === 'radar') return '雷达'
     return '炮塔'
@@ -4195,7 +4386,7 @@ export class PixiRts {
         }
       } else if (structure.kind === 'repair' && delta > 0) {
         this.repairAround(structure, delta)
-	      } else if ((structure.kind === 'factory' || structure.kind === 'airfield') && delta > 0) {
+	      } else if ((structure.kind === 'factory' || structure.kind === 'airfield' || structure.kind === 'seaFactory') && delta > 0) {
 	        this.updateFactoryProduction(structure, delta)
       } else if (structure.kind === 'radar' && structure.attackCooldown <= 0 && delta > 0) {
         this.radarPulse(structure)
@@ -4251,6 +4442,7 @@ export class PixiRts {
 	    if (structure.dead || structure.construction || structure.production) return false
 	    if (structure.kind === 'factory' && !this.isFactoryProducedRole(role)) return false
 	    if (structure.kind === 'airfield' && !this.isAirProducedRole(role)) return false
+	    if (structure.kind === 'seaFactory' && !this.isWaterProducedRole(role)) return false
 	
 	    const alive = this.units.filter((unit) => unit.team === structure.team && !unit.dead).length
 	    if (alive >= this.unitCap(structure.team, 18)) return false
@@ -4279,12 +4471,12 @@ export class PixiRts {
   }
 
 	  private chooseStructureProductionRole(structure: StructureState): UnitRole | undefined {
-	    return structure.kind === 'airfield'
-	      ? this.chooseAirfieldRole(structure.team)
-	      : this.chooseFactoryRole(structure.team)
+	    if (structure.kind === 'airfield') return this.chooseAirfieldRole(structure.team)
+	    if (structure.kind === 'seaFactory') return this.chooseSeaFactoryRole(structure.team)
+	    return this.chooseFactoryRole(structure.team)
 	  }
 	
-  private chooseAirfieldRole(team: Team): UnitRole | undefined {
+	  private chooseAirfieldRole(team: Team): UnitRole | undefined {
     const resources = this.resourcesFor(team)
     const intent = this.aiIntent[team]
     const roles: UnitRole[] = intent.phase === 'assault' && resources > 230
@@ -4298,6 +4490,17 @@ export class PixiRts {
             : ['spyDrone', 'interceptor']
 	    return roles.find((role) => this.resourcesFor(team) >= this.unitCost(role)) ?? roles[roles.length - 1]
 	  }
+
+  private chooseSeaFactoryRole(team: Team): UnitRole | undefined {
+    const resources = this.resourcesFor(team)
+    const intent = this.aiIntent[team]
+    const roles: UnitRole[] = intent.phase === 'assault'
+      ? ['battleship', 'missileShip', 'aaShip', 'lightSub']
+      : intent.phase === 'defend' || intent.phase === 'recover'
+        ? ['aaShip', 'lightSub', 'battleship']
+        : ['lightSub', 'aaShip', 'battleship', 'missileShip']
+    return roles.find((role) => resources >= this.unitCost(role)) ?? roles[roles.length - 1]
+  }
 	
   private chooseFactoryRole(team: Team): UnitRole {
     const resources = this.resourcesFor(team)
@@ -4684,7 +4887,7 @@ export class PixiRts {
     }
   }
 
-  private isWaterTerrain(terrain: TerrainType) {
+  private isWaterTerrain(terrain?: TerrainType) {
     return terrain === 'water' || terrain === 'deepWater' || terrain === 'shallowWater'
   }
 
@@ -4934,6 +5137,7 @@ export class PixiRts {
       `I 维修 ${this.structureCost('repair')}`,
       `O 工厂 ${this.structureCost('factory')}`,
       `P 空军 ${this.structureCost('airfield')}`,
+      `[ 船厂 ${this.structureCost('seaFactory')}`,
     ]
   }
 
@@ -4975,17 +5179,19 @@ export class PixiRts {
     const sidebarX = this.getViewportWidth()
     const cardX = sidebarX + 16
     const cardW = Math.max(180, this.app.screen.width - sidebarX - 32)
-    const compactSidebar = this.app.screen.height < 720
+    const compactSidebar = this.app.screen.height <= 720
+    const ultraCompactSidebar = this.app.screen.height < 660
     const gridY = compactSidebar ? 414 : 458
     const buttonW = Math.floor((cardW - 16) / 3)
-    const buttonH = compactSidebar ? 19 : 23
+    const buttonH = ultraCompactSidebar ? 15 : compactSidebar ? 19 : 23
+    const rowGap = ultraCompactSidebar ? 2 : 4
     const gap = 8
     const column = Math.floor((point.x - cardX) / (buttonW + gap))
-    const row = Math.floor((point.y - gridY) / (buttonH + 4))
+    const row = Math.floor((point.y - gridY) / (buttonH + rowGap))
     if (column < 0 || column > 2 || row < 0) return false
 
     const buttonX = cardX + column * (buttonW + gap)
-    const buttonY = gridY + row * (buttonH + 4)
+    const buttonY = gridY + row * (buttonH + rowGap)
     if (point.x > buttonX + buttonW || point.y > buttonY + buttonH) return false
 
     const commandIndex = row * 3 + column
@@ -4995,7 +5201,7 @@ export class PixiRts {
     if (commandIndex < PRODUCTION_BINDINGS.length) {
       this.produceUnit(PRODUCTION_BINDINGS[commandIndex].role)
     } else {
-      const structures: StructureKind[] = ['turret', 'extractor', 'radar', 'repair', 'factory', 'airfield']
+      const structures: StructureKind[] = ['turret', 'extractor', 'radar', 'repair', 'factory', 'airfield', 'seaFactory']
       this.buildStructureAtSelection(structures[commandIndex - PRODUCTION_BINDINGS.length])
     }
     this.drawUi()
@@ -5014,8 +5220,10 @@ export class PixiRts {
     const controlledNodes = this.resourceNodes.filter((node) => node.controller === 'player').length
 	    const playerFactories = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'factory' && !structure.dead)
 	    const playerAirfields = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'airfield' && !structure.dead)
+	    const playerSeaFactories = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'seaFactory' && !structure.dead)
 	    const activeFactoryJobs = playerFactories.filter((structure) => structure.production).length
 	    const activeAirJobs = playerAirfields.filter((structure) => structure.production).length
+	    const activeSeaJobs = playerSeaFactories.filter((structure) => structure.production).length
     const baseProduction = this.playerBase.production
       ? `${PRODUCTION_LABELS[this.playerBase.production.role]} ${Math.round((this.playerBase.production.progress / this.playerBase.production.duration) * 100)}%`
       : '空闲'
@@ -5121,7 +5329,8 @@ export class PixiRts {
       this.uiCommands.visible = true
       const cardX = sidebarX + 16
       const cardW = Math.max(180, sidebarWidth - 32)
-      const compactSidebar = height < 720
+      const compactSidebar = height <= 720
+      const ultraCompactSidebar = height < 660
       this.uiBackground.beginFill(0x0f1a16, 0.72)
       this.uiBackground.drawRect(cardX, 258, cardW, compactSidebar ? 154 : 190)
       this.uiBackground.endFill()
@@ -5130,8 +5339,8 @@ export class PixiRts {
       this.uiStats.style = new TextStyle({
         fill: 0xbfe8d0,
         fontFamily: 'Inter, Avenir, Helvetica, Arial, sans-serif',
-        fontSize: compactSidebar ? 11 : 12,
-        lineHeight: compactSidebar ? 15 : 18,
+        fontSize: ultraCompactSidebar ? 10 : compactSidebar ? 11 : 12,
+        lineHeight: ultraCompactSidebar ? 14 : compactSidebar ? 15 : 18,
         wordWrap: true,
         wordWrapWidth: Math.max(170, sidebarWidth - 44),
       })
@@ -5143,6 +5352,7 @@ export class PixiRts {
         `资源点 ${controlledNodes}/${this.resourceNodes.length}  增援 ${Math.max(0, Math.ceil(this.reinforceTimer / 60))}s`,
         `基地 ${Math.ceil(this.playerBase.hp)}/${this.playerBase.maxHp}  ${baseProduction}`,
         `工厂 ${activeFactoryJobs}/${playerFactories.length}  空军 ${activeAirJobs}/${playerAirfields.length}`,
+        `船厂 ${activeSeaJobs}/${playerSeaFactories.length}`,
         `AI ${this.mapModeLabel(this.mapMode)}·${this.aiPhaseLabel(this.aiIntent.enemy.phase)} ${this.aiIntent.enemy.lastAction}`,
         `选中 ${selected}${this.selectedUnits.length > 1 ? `  血量 ${selectedPower}` : ''}`,
         this.stressMode ? '压测: 1000单位同屏' : '',
@@ -5151,11 +5361,12 @@ export class PixiRts {
       const gridX = cardX
       const gridY = compactSidebar ? 414 : 458
       const buttonW = Math.floor((cardW - 16) / 3)
-      const buttonH = compactSidebar ? 19 : 23
+      const buttonH = ultraCompactSidebar ? 15 : compactSidebar ? 19 : 23
+      const rowGap = ultraCompactSidebar ? 2 : 4
       for (let row = 0; row < commandLines.length; row++) {
         for (let col = 0; col < 3; col++) {
           const buttonX = gridX + col * (buttonW + 8)
-          const buttonY = gridY + row * (buttonH + 4)
+          const buttonY = gridY + row * (buttonH + rowGap)
           this.uiBackground.beginFill(0x16241d, 0.62)
           this.uiBackground.drawRect(buttonX, buttonY, buttonW, buttonH)
           this.uiBackground.endFill()
@@ -5167,8 +5378,8 @@ export class PixiRts {
       this.uiCommands.style = new TextStyle({
         fill: 0x22ff55,
         fontFamily: 'Menlo, Consolas, monospace',
-        fontSize: compactSidebar ? 9 : 10,
-        lineHeight: compactSidebar ? 23 : 27,
+        fontSize: ultraCompactSidebar ? 8 : compactSidebar ? 9 : 10,
+        lineHeight: ultraCompactSidebar ? 17 : compactSidebar ? 23 : 27,
         wordWrap: false,
       })
       this.uiCommands.text = commandLines.join('\n')
