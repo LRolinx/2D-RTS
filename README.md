@@ -20,6 +20,15 @@ pnpm build
 
 `pnpm build` 会先执行类型检查，再生成 Vite 生产构建。
 
+依赖安全检查：
+
+```bash
+pnpm install --frozen-lockfile
+pnpm audit --prod
+```
+
+`package.json` 中的 pnpm overrides 用于锁定传递依赖的已修复版本；更新依赖后应重新运行审计和构建。
+
 ## 已实现玩法
 
 - 左键点选单位或地块，左键拖拽框选编队。
