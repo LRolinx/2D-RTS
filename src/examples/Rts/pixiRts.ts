@@ -567,6 +567,7 @@ export class PixiRts {
   private uiMatchDetails: Text
   private uiMatchButton: Text
   private matchRestartRect = { x: 0, y: 0, width: 0, height: 0 }
+  private minimapRect = { x: 0, y: 0, width: 0, height: 0, scaleX: 1, scaleY: 1 }
   private map: number[][] = []
   private terrainMap: TerrainType[][] = []
   private heightMap: number[][] = []
@@ -574,6 +575,7 @@ export class PixiRts {
   private structures: StructureState[] = []
   private resourceNodes: ResourceNode[] = []
   private selectedUnits: RtsUnit[] = []
+  private controlGroups: Record<number, RtsUnit[]> = {}
   private selectedCell?: GridPoint
   private activeBuilder?: RtsUnit
   private hoveredUnit?: RtsUnit
@@ -1664,6 +1666,28 @@ export class PixiRts {
 
     if (this.battleState !== 'running') return
 
+    const controlGroupMatch = event.code.match(/^Digit([1-9])$/)
+    if (controlGroupMatch && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault()
+      const group = Number(controlGroupMatch[1])
+      this.controlGroups[group] = this.selectedUnits.filter((unit) => !unit.dead)
+      this.drawUi()
+      return
+    }
+    if (controlGroupMatch && !event.shiftKey && !event.altKey) {
+      const group = Number(controlGroupMatch[1])
+      const units = (this.controlGroups[group] ?? []).filter((unit) => !unit.dead)
+      if (units.length > 0) {
+        event.preventDefault()
+        this.selectedUnits = units
+        this.activeBuilder = units.find((unit) => unit.def.builder)
+        this.drawOverlay()
+        this.drawPath()
+        this.drawUi()
+        return
+      }
+    }
+
     if (event.code === 'Space') {
       event.preventDefault()
       this.isPaused = !this.isPaused
@@ -1966,6 +1990,7 @@ export class PixiRts {
     this.resetUnits()
     this.resetStructures()
     this.selectedUnits = []
+    this.controlGroups = {}
     this.selectedCell = undefined
     this.activeBuilder = undefined
     this.dragState = undefined
@@ -4729,6 +4754,7 @@ export class PixiRts {
     const y = width >= 760 ? 70 : Math.max(12, height - minimapHeight - 12)
     const scaleX = minimapWidth / Math.max(1, this.boardWidth)
     const scaleY = minimapHeight / Math.max(1, this.boardHeight)
+    this.minimapRect = { x, y, width: minimapWidth, height: minimapHeight, scaleX, scaleY }
 
     this.minimapLayer.clear()
     this.minimapLayer.beginFill(0x071018, 0.9)
@@ -4924,6 +4950,22 @@ export class PixiRts {
       ) {
         this.rebuildWorld()
       }
+      return true
+    }
+
+    if (
+      point.x >= this.minimapRect.x &&
+      point.x <= this.minimapRect.x + this.minimapRect.width &&
+      point.y >= this.minimapRect.y &&
+      point.y <= this.minimapRect.y + this.minimapRect.height
+    ) {
+      const worldX = (point.x - this.minimapRect.x) / this.minimapRect.scaleX
+      const worldY = (point.y - this.minimapRect.y) / this.minimapRect.scaleY
+      this.camera.x = this.getViewportWidth() / 2 - worldX * this.camera.scale
+      this.camera.y = this.app.screen.height / 2 - worldY * this.camera.scale
+      this.clampCamera()
+      this.applyCamera()
+      this.drawMinimap()
       return true
     }
 
