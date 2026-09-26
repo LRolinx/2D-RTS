@@ -1,6 +1,6 @@
 # 2D RTS
 
-基于 Vue 3、TypeScript、Vite 和 PixiJS 的可运行 2D RTS。Vue 管理应用生命周期与加载错误界面，PixiJS 负责战场渲染、单位、建筑、寻路、战斗、经济和交互。
+基于 Vue 3、TypeScript、Vite 6 和 PixiJS 的可运行 2D RTS，固定使用 pnpm 管理依赖。Vue 管理应用生命周期与加载错误界面，PixiJS 负责战场渲染、单位、建筑、寻路、战斗、经济和交互。
 
 ## 运行
 
