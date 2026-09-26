@@ -9,7 +9,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "pnpm test:ai",
-    "test:ai": "node --experimental-strip-types --test tests/strategicAi.test.ts"
+    "test:ai": "node --experimental-strip-types --test tests/strategicAi.test.ts tests/contentRegistry.test.ts"
   },
   "dependencies": {
     "@types/matter-js": "^0.19.7",

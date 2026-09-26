@@ -4,11 +4,12 @@ import vue from '@vitejs/plugin-vue'
 // https://vitejs.dev/config/
 export default defineConfig({
   build: {
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks: {
-          pixi: ['pixi.js'],
+        manualChunks(id) {
+          if (id.includes('/node_modules/pixi.js/')) return 'pixi'
+          if (id.includes('/src/assets/units/')) return 'unit-assets'
         },
       },
     },

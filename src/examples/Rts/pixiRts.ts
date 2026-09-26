@@ -16,6 +16,15 @@ import {
   type StrategicAiPlan,
   type StrategicAiSnapshot,
 } from './strategicAi'
+import {
+  ADDITIONAL_STRUCTURE_CONTENT,
+  ADDITIONAL_UNIT_CONTENT,
+  type AdditionalStructureKind,
+  type AdditionalUnitRole,
+  type ContentFaction,
+  type ContentProducer,
+  type StructureFamily,
+} from './contentRegistry'
 import tankImageUrl from '../../assets/units/test_tank/tank.png'
 import tankDeadImageUrl from '../../assets/units/test_tank/tank_dead.png'
 import scoutImageUrl from '../../assets/units/scout/base.png'
@@ -122,6 +131,8 @@ type GridPoint = {
 }
 
 type Team = 'player' | 'enemy'
+type Faction = ContentFaction
+type ProducerKind = ContentProducer
 type MapMode = 'frontier' | 'highlands' | 'archipelago'
 type IniData = Record<string, Record<string, string>>
 type TurretIni = { section: string; id: string } & Record<string, string>
@@ -137,7 +148,7 @@ type BaseState = {
   productionQueue: ProductionJob[]
 }
 
-type StructureKind = 'turret' | 'extractor' | 'radar' | 'repair' | 'factory' | 'airfield' | 'seaFactory'
+type StructureKind = 'turret' | 'extractor' | 'radar' | 'repair' | 'factory' | 'airfield' | 'seaFactory' | AdditionalStructureKind
 
 type ProductionJob = {
   role: UnitRole
@@ -302,6 +313,7 @@ type UnitRole =
   | 'battleship'
   | 'missileShip'
   | 'aaShip'
+  | AdditionalUnitRole
 
 type UnitTurretPartDef = {
   texture: Texture
@@ -379,6 +391,8 @@ type UnitDef = {
   canAttackFlying?: boolean
   canAttackLand?: boolean
   isBuildingConfig?: boolean
+  faction?: Faction
+  producer?: ProducerKind
   weapons?: WeaponDef[]
 }
 
@@ -462,6 +476,11 @@ type DragState = {
   worldCurrent: GridPoint
 }
 
+type CommandEntry =
+  | { kind: 'unit'; role: UnitRole }
+  | { kind: 'structure'; structure: StructureKind }
+  | { kind: 'research'; research: ResearchKey }
+
 const GRID_SIZE = 18
 const SIDEBAR_WIDTH = 320
 const PLAYER_UNIT_COUNT = 4
@@ -490,7 +509,7 @@ const PRODUCTION_BINDINGS: Array<{ code: string; key: string; role: UnitRole }> 
   { code: 'Comma', key: ',', role: 'missileShip' },
   { code: 'Period', key: '.', role: 'aaShip' },
 ]
-const PRODUCTION_LABELS: Record<UnitRole, string> = {
+const PRODUCTION_LABELS = {
   engineer: '工程',
   scout: '侦察',
   tank: '坦克',
@@ -512,33 +531,22 @@ const PRODUCTION_LABELS: Record<UnitRole, string> = {
   battleship: '战列舰',
   missileShip: '导弹舰',
   aaShip: '防空舰',
-}
-const UNIT_ASSET_URLS = import.meta.glob([
-  '../../assets/units/shared/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/turrets/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/combat_engineer/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/scout/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/tanks/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/plasma_tank/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/mammoth_tank/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/helicopter/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/missile_tank/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/laser_tank/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/experimental_tank/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/interceptor/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/heavy_interceptor/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/bomber/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/light_gunship/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/spy_drone/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/fire_bee/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/light_sub/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/heavy_battleship/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/heavy_missile_ship/*.{png,jpg,jpeg,webp}',
-  '../../assets/units/heavy_aa_ship/*.{png,jpg,jpeg,webp}',
-], {
+  ...Object.fromEntries(ADDITIONAL_UNIT_CONTENT.map((entry) => [entry.role, entry.label])),
+} as Record<UnitRole, string>
+const ADDITIONAL_PRODUCTION_BINDINGS: Array<{ code: string; key: string; role: UnitRole }> = ADDITIONAL_UNIT_CONTENT.map((entry) => ({
+  code: '',
+  key: '点击',
+  role: entry.role,
+}))
+const UNIT_ASSET_URLS = import.meta.glob('../../assets/units/**/*.{png,jpg,jpeg,webp}', {
   eager: true,
   import: 'default',
   query: '?url',
+}) as Record<string, string>
+const ALL_UNIT_INI_RAW = import.meta.glob('../../assets/units/**/*.ini', {
+  eager: true,
+  import: 'default',
+  query: '?raw',
 }) as Record<string, string>
 const UNIT_ASSET_DIRS: Record<UnitRole, string> = {
   engineer: 'combat_engineer',
@@ -562,12 +570,67 @@ const UNIT_ASSET_DIRS: Record<UnitRole, string> = {
   battleship: 'heavy_battleship',
   missileShip: 'heavy_missile_ship',
   aaShip: 'heavy_aa_ship',
+  aaBeamGunship: 'aa_beam_gunship',
+  aaBeamGunshipAfterburn: 'aa_beam_gunship',
+  amphibiousJet: 'amphibious_jet',
+  amphibiousJetTransition: 'amphibious_jet',
+  amphibiousJetUnderwater: 'amphibious_jet',
+  experimentalCarrier: 'experimental_carrier',
+  experimentalDropship: 'experimental_dropship',
+  experimentalGunship: 'experimental_gunship',
+  experimentalGunshipLanded: 'experimental_gunship',
+  experimentalSpider: 'experimental_spider',
+  heavySub: 'heavy_sub',
+  mechEngineer: 'mech_engineer',
+  mechArtillery: 'mechs_large',
+  mechBunker: 'mechs_large',
+  mechBunkerDeployed: 'mechs_large',
+  mechFlame: 'mechs_large',
+  mechFlyingLanded: 'mechs_large',
+  mechFlyingTakeoff: 'mechs_large',
+  mechHeavyMissile: 'mechs_large',
+  mechLaser: 'mechs_large',
+  mechLightning: 'mechs_large',
+  mechMinigun: 'mechs_large',
+  mechGun: 'mechs_small',
+  mechMissile: 'mechs_small',
+  missileAirship: 'missile_airship',
+  modularSpider: 'modular_spider',
+  nautilusSubmarine: 'nautilus',
+  nautilusSubmarineLand: 'nautilus',
+  nautilusSubmarineSurface: 'nautilus',
+  robotCrab: 'nautilus/robotCrab',
+  robotCrabWater: 'nautilus/robotCrab',
+  classicTank: 'tanks',
+  bugMeleeT31: 'bug_melee',
+  bugBee: 'classic_bugs/bug_bee',
+  bugFly: 'classic_bugs/bug_fly',
+  bugMelee: 'classic_bugs/bug_melee',
+  bugMeleeLarge: 'classic_bugs/bug_melee',
+  bugMeleeSmall: 'classic_bugs/bug_melee',
+  bugRanged: 'classic_bugs/bug_ranged',
+  bugSpore: 'classic_bugs/bug_spore',
+  bugPickup: 'classic_bugs/bugs',
+  bugWasp: 'classic_bugs/bugs',
+  bugRangedT2: 'classic_bugs/bugs_t2',
+}
+const resolveUnitAssetUrl = (path: string) => {
+  const normalized = path.replace(/^\/+/, '').toLowerCase()
+  return Object.entries(UNIT_ASSET_URLS).find(([assetPath]) => (
+    assetPath.toLowerCase().endsWith(`/assets/units/${normalized}`)
+  ))?.[1]
+}
+const resolveUnitIniRaw = (path: string) => {
+  const normalized = path.replace(/^\/+/, '').toLowerCase()
+  return Object.entries(ALL_UNIT_INI_RAW).find(([iniPath]) => (
+    iniPath.toLowerCase().endsWith(`/assets/units/${normalized}`)
+  ))?.[1]
 }
 const createTileTexture = (url: string, x = 0, y = 0) => new Texture(
   Texture.from(url).baseTexture,
   new Rectangle(x, y, 20, 20),
 )
-const UNIT_INI_RAW: Record<UnitRole, string> = {
+const UNIT_INI_RAW: Partial<Record<UnitRole, string>> = {
   engineer: engineerIniRaw,
   scout: scoutIniRaw,
   tank: tankIniRaw,
@@ -590,7 +653,30 @@ const UNIT_INI_RAW: Record<UnitRole, string> = {
   missileShip: missileShipIniRaw,
   aaShip: aaShipIniRaw,
 }
-const STRUCTURE_INI_RAW: Record<StructureKind, string[]> = {
+const UNIT_INI_PATHS: Partial<Record<UnitRole, string>> = {
+  engineer: 'combat_engineer/combat_engineer.ini',
+  scout: 'scout/scout.ini',
+  tank: 'test_tank/tank.ini',
+  plasma: 'plasma_tank/plasma_tank.ini',
+  mammoth: 'mammoth_tank/mammoth_tank.ini',
+  helicopter: 'helicopter/helicopter.ini',
+  missile: 'missile_tank/missile_tank.ini',
+  laser: 'laser_tank/laser_tank.ini',
+  artillery: 'tanks/artillery.ini',
+  heavyArtillery: 'tanks/heavy_artillery.ini',
+  experimental: 'experimental_tank/experimental_tank.ini',
+  interceptor: 'interceptor/interceptor.ini',
+  heavyInterceptor: 'heavy_interceptor/heavyInterceptor.ini',
+  bomber: 'bomber/bomber.ini',
+  gunship: 'light_gunship/light_gunship.ini',
+  spyDrone: 'spy_drone/spy_drone.ini',
+  fireBee: 'fire_bee/fire_bee.ini',
+  lightSub: 'light_sub/light_sub.ini',
+  battleship: 'heavy_battleship/heavy_battleship.ini',
+  missileShip: 'heavy_missile_ship/heavy_missile_ship.ini',
+  aaShip: 'heavy_aa_ship/heavy_aa_ship.ini',
+}
+const STRUCTURE_INI_RAW: Partial<Record<StructureKind, string[]>> = {
   turret: [turretCommonIniRaw, turretIniRaw],
   extractor: [extractorCommonIniRaw, extractorIniRaw],
   radar: [outpostIniRaw],
@@ -603,7 +689,7 @@ const createSheetFrameTexture = (url: string, frameWidth: number, frameHeight: n
   Texture.from(url).baseTexture,
   new Rectangle(frame * frameWidth, 0, frameWidth, frameHeight),
 )
-const STRUCTURE_TEXTURES: Record<StructureKind, {
+type StructureTextureConfig = {
   body: Texture
   back?: Texture
   turret?: Texture
@@ -616,7 +702,8 @@ const STRUCTURE_TEXTURES: Record<StructureKind, {
   turretHeight?: number
   turretOffsetX?: number
   turretOffsetY?: number
-}> = {
+}
+const STRUCTURE_TEXTURES: Record<string, StructureTextureConfig> = {
   turret: {
     body: Texture.from(turretBaseImageUrl),
     turret: Texture.from(turretTopImageUrl),
@@ -673,7 +760,29 @@ const STRUCTURE_TEXTURES: Record<StructureKind, {
     height: 72,
   },
 }
+const additionalStructureTexture = (entry: typeof ADDITIONAL_STRUCTURE_CONTENT[number]): StructureTextureConfig => {
+  const fallback = resolveUnitAssetUrl('outpost/outpost.png') ?? hqBaseImageUrl
+  const texture = (path?: string) => Texture.from(resolveUnitAssetUrl(path ?? '') ?? fallback)
+  const family = entry.family
+  return {
+    body: texture(entry.body),
+    back: 'back' in entry && entry.back ? texture(entry.back) : undefined,
+    turret: 'turret' in entry && entry.turret ? texture(entry.turret) : family === 'radar' ? Texture.from(radarImageUrl) : undefined,
+    door: 'door' in entry && entry.door ? texture(entry.door) : undefined,
+    width: family === 'turret' ? 42 : family === 'factory' ? 62 : family === 'extractor' ? 44 : 50,
+    height: family === 'turret' ? 42 : family === 'factory' ? 78 : family === 'extractor' ? 58 : 54,
+    backWidth: family === 'extractor' ? 51 : undefined,
+    backHeight: family === 'extractor' ? 44 : undefined,
+    turretWidth: family === 'turret' ? 28 : family === 'radar' ? 30 : undefined,
+    turretHeight: family === 'turret' ? 42 : family === 'radar' ? 30 : undefined,
+    turretOffsetY: family === 'radar' ? -18 : family === 'turret' ? -4 : undefined,
+  }
+}
+for (const entry of ADDITIONAL_STRUCTURE_CONTENT) {
+  STRUCTURE_TEXTURES[entry.kind] = additionalStructureTexture(entry)
+}
 const HQ_TEXTURE = Texture.from(hqBaseImageUrl)
+const BUG_HQ_TEXTURE = Texture.from(resolveUnitAssetUrl('bug_base/bug_generator/bug_generator.png') ?? hqBaseImageUrl)
 
 export class PixiRts {
   private app: Application
@@ -709,6 +818,7 @@ export class PixiRts {
   private resourceNodes: ResourceNode[] = []
   private selectedUnits: RtsUnit[] = []
   private controlGroups: Record<number, RtsUnit[]> = {}
+  private commandPage = 0
   private selectedCell?: GridPoint
   private activeBuilder?: RtsUnit
   private hoveredUnit?: RtsUnit
@@ -758,12 +868,18 @@ export class PixiRts {
     const requested = new URLSearchParams(window.location.search).get('map')
     return requested === 'highlands' || requested === 'archipelago' ? requested : 'frontier'
   })()
+  private readonly playerFaction: Faction = typeof window === 'undefined'
+    ? 'mech'
+    : new URLSearchParams(window.location.search).get('player') === 'bugs' ? 'bugs' : 'mech'
+  private readonly enemyFaction: Faction = typeof window === 'undefined'
+    ? 'mech'
+    : new URLSearchParams(window.location.search).get('enemy') === 'bugs' ? 'bugs' : 'mech'
   private frameCount = 0
   private mapRefreshTimer = 0
   private uiRefreshTimer = 0
   private minimapRefreshTimer = 0
   private fogRefreshTimer = 0
-  private unitDefs: Record<UnitRole, UnitDef> = {
+  private unitDefs: Record<string, UnitDef> = {
     engineer: {
       role: 'engineer',
       name: '战地工程师',
@@ -1399,6 +1515,7 @@ export class PixiRts {
     this.resizeObserver = new ResizeObserver(() => this.rebuildWorld())
     this.resizeObserver.observe(this.host)
 
+    this.registerAdditionalUnitDefs()
     this.applyIniConfigs()
     this.rebuildWorld()
     this.app.ticker.add(this.update)
@@ -1421,15 +1538,91 @@ export class PixiRts {
     event.preventDefault()
   }
 
+  private registerAdditionalUnitDefs() {
+    const fallbackUrl = scoutImageUrl
+    for (const entry of ADDITIONAL_UNIT_CONTENT) {
+      const texture = Texture.from(resolveUnitAssetUrl(entry.image) ?? fallbackUrl)
+      const deadImage = 'deadImage' in entry ? entry.deadImage : undefined
+      const deadTexture = deadImage
+        ? Texture.from(resolveUnitAssetUrl(deadImage) ?? entry.image)
+        : undefined
+      const frameWidth = 'frameWidth' in entry ? entry.frameWidth : undefined
+      const frameHeight = 'frameHeight' in entry ? entry.frameHeight : undefined
+      const frameCount = 'frameCount' in entry ? entry.frameCount : undefined
+      const frames = frameWidth && frameHeight && frameCount ? undefined : [texture]
+      const water = 'water' in entry && entry.water === true
+      const flying = 'flying' in entry && entry.flying === true
+      const expensive = entry.role.startsWith('experimental') || entry.role.startsWith('nautilus') || entry.role === 'modularSpider'
+      const bug = entry.faction === 'bugs'
+      const turretTexture = entry.role === 'robotCrab' || entry.role === 'robotCrabWater'
+        ? Texture.from(resolveUnitAssetUrl('nautilus/robotCrab/turret.png') ?? fallbackUrl)
+        : undefined
+      this.unitDefs[entry.role] = {
+        role: entry.role,
+        name: entry.label,
+        texture,
+        deadTexture,
+        frames,
+        frameWidth: frameWidth ?? 48,
+        frameHeight: frameHeight ?? 48,
+        frameCount: frameCount ?? 1,
+        animationSpeed: 0,
+        cost: expensive ? (bug ? 420 : 520) : bug ? 95 : 180,
+        hp: expensive ? (bug ? 680 : 720) : bug ? 95 : 190,
+        speed: flying ? 1.18 : water ? 0.72 : 0.7,
+        range: expensive ? 230 : 165,
+        damage: expensive ? 62 : bug ? 16 : 28,
+        cooldown: expensive ? 92 : 48,
+        projectileSpeed: 5.4,
+        attackKind: flying ? 'rapid' : water ? 'missile' : 'cannon',
+        splashRadius: expensive ? 28 : 12,
+        projectileSize: expensive ? 4 : 2.6,
+        width: expensive ? 52 : 34,
+        height: expensive ? 54 : 36,
+        color: bug ? 0xe879f9 : 0x9cc7ff,
+        flying,
+        turretTexture,
+        turretWidth: turretTexture ? 16 : undefined,
+        turretHeight: turretTexture ? 22 : undefined,
+        builder: 'builder' in entry && entry.builder === true,
+        faction: entry.faction,
+        producer: entry.producer,
+        movementType: water ? 'WATER' : flying ? 'AIR' : 'LAND',
+        canAttackFlying: flying || entry.role === 'robotCrab' || entry.role === 'robotCrabWater',
+        canAttackLand: true,
+      }
+    }
+  }
+
   private applyIniConfigs() {
-    for (const role of Object.keys(UNIT_INI_RAW) as UnitRole[]) {
-      const config = this.parseIni(UNIT_INI_RAW[role])
+    const roles = new Set<UnitRole>([
+      ...(Object.keys(UNIT_INI_RAW) as UnitRole[]),
+      ...ADDITIONAL_UNIT_CONTENT.map((entry) => entry.role),
+    ])
+    for (const role of roles) {
+      const additional = ADDITIONAL_UNIT_CONTENT.find((entry) => entry.role === role)
+      const raw = UNIT_INI_RAW[role]
+        ?? (UNIT_INI_PATHS[role] ? resolveUnitIniRaw(UNIT_INI_PATHS[role]!) : undefined)
+        ?? (additional ? resolveUnitIniRaw(additional.ini) : undefined)
+      if (!raw) continue
+      const config = this.resolveIniConfig(raw, additional?.ini ?? UNIT_INI_PATHS[role])
+      if (!this.unitDefs[role].faction) this.unitDefs[role].faction = 'mech'
       this.unitIniConfigs[role] = config
       this.applyUnitIniConfig(role, config)
     }
 
     for (const kind of Object.keys(STRUCTURE_INI_RAW) as StructureKind[]) {
-      this.structureIniConfigs[kind] = this.mergeIniConfigs(STRUCTURE_INI_RAW[kind].map((raw) => this.parseIni(raw)))
+      const rawConfigs = STRUCTURE_INI_RAW[kind]
+      if (rawConfigs) this.structureIniConfigs[kind] = this.mergeIniConfigs(rawConfigs.map((raw) => this.parseIni(raw)))
+    }
+    for (const entry of ADDITIONAL_STRUCTURE_CONTENT) {
+      const configs = entry.ini
+        .map((path) => {
+          const raw = resolveUnitIniRaw(path)
+          return raw ? this.resolveIniConfig(raw, path) : undefined
+        })
+        .filter((config): config is IniData => Boolean(config))
+      this.structureIniConfigs[entry.kind] = this.mergeIniConfigs(configs)
     }
   }
 
@@ -1456,6 +1649,38 @@ export class PixiRts {
     }
 
     return data
+  }
+
+  private resolveIniConfig(raw: string, sourcePath?: string, seen = new Set<string>()): IniData {
+    const config = this.parseIni(raw)
+    const parentPath = config.core?.copyfrom?.trim()
+    if (!parentPath || /^[0-9]+$/.test(parentPath)) return config
+
+    const normalizedSource = sourcePath?.replace(/^\/+/, '').replace(/\\/g, '/')
+    const sourceDir = normalizedSource?.includes('/') ? normalizedSource.slice(0, normalizedSource.lastIndexOf('/')) : ''
+    const candidates = [
+      sourceDir ? `${sourceDir}/${parentPath}` : '',
+      parentPath,
+    ].filter(Boolean)
+    const parentEntry = candidates
+      .map((candidate) => {
+        const normalized = candidate.split('/').filter((part) => part && part !== '.').reduce<string[]>((parts, part) => {
+          if (part === '..') parts.pop()
+          else parts.push(part)
+          return parts
+        }, []).join('/')
+        return { path: normalized, raw: resolveUnitIniRaw(normalized) }
+      })
+      .find((entry) => entry.raw && !seen.has(entry.path))
+    if (!parentEntry?.raw) return config
+
+    const nextSeen = new Set(seen)
+    if (sourcePath) nextSeen.add(sourcePath)
+    nextSeen.add(parentEntry.path)
+    return this.mergeIniConfigs([
+      this.resolveIniConfig(parentEntry.raw, parentEntry.path, nextSeen),
+      config,
+    ])
   }
 
   private mergeIniConfigs(configs: IniData[]) {
@@ -1917,6 +2142,14 @@ export class PixiRts {
 
     if (this.battleState !== 'running') return
 
+    if (event.code === 'PageUp' || event.code === 'PageDown') {
+      event.preventDefault()
+      const direction = event.code === 'PageDown' ? 1 : -1
+      this.commandPage = (this.commandPage + direction + this.commandPageCount()) % this.commandPageCount()
+      this.drawUi()
+      return
+    }
+
     const controlGroupMatch = event.code.match(/^Digit([1-9])$/)
     if (controlGroupMatch && (event.ctrlKey || event.metaKey)) {
       event.preventDefault()
@@ -1992,6 +2225,25 @@ export class PixiRts {
     return team === 'player' ? PLAYER_UNIT_COUNT : ENEMY_UNIT_COUNT
   }
 
+  private teamFaction(team: Team): Faction {
+    return team === 'player' ? this.playerFaction : this.enemyFaction
+  }
+
+  private factionRoster(team: Team): UnitRole[] {
+    if (this.teamFaction(team) === 'bugs') {
+      return ['bugMelee', 'bugRanged', 'bugMeleeSmall', 'bugFly', 'bugBee', 'bugSpore']
+    }
+    return ['engineer', 'tank', 'scout', 'tank', 'engineer', 'scout']
+  }
+
+	  private builderRole(team: Team) {
+    return this.teamFaction(team) === 'bugs' ? 'bugMeleeT31' : 'mechEngineer'
+	  }
+
+  private frontlineRole(team: Team) {
+    return this.teamFaction(team) === 'bugs' ? 'bugMelee' : 'tank'
+  }
+
 	  private unitCap(team: Team, bonus: number) {
 	    return this.startingUnitCount(team) + bonus + 14
 	  }
@@ -2002,11 +2254,7 @@ export class PixiRts {
 	      return
 	    }
 	
-    const producerKind: StructureKind = this.isAirProducedRole(role)
-      ? 'airfield'
-      : this.isWaterProducedRole(role)
-        ? 'seaFactory'
-        : 'factory'
+    const producerKind = this.producerForRole(role) as Exclude<ProducerKind, 'base'>
     const producer = this.completedTeamStructures('player', producerKind)
       .filter((structure) => this.productionSlotsUsed(structure) < 3)
 	      .sort((a, b) => a.attackCooldown - b.attackCooldown)[0]
@@ -2014,23 +2262,36 @@ export class PixiRts {
 	  }
 	
 	  private isBaseProducedRole(role: UnitRole) {
-	    return role === 'engineer' || role === 'scout' || role === 'tank'
+	    return this.producerForRole(role) === 'base'
 	  }
-	
-  private isAirProducedRole(role: UnitRole) {
-    return this.unitDefs[role].flying === true
+
+	  private isAirProducedRole(role: UnitRole) {
+	    return this.producerForRole(role) === 'airfield'
+	  }
+
+	  private isWaterProducedRole(role: UnitRole) {
+	    return this.producerForRole(role) === 'seaFactory'
+	  }
+
+	  private isFactoryProducedRole(role: UnitRole) {
+	    return this.producerForRole(role) === 'factory'
+		  }
+
+  private producerForRole(role: UnitRole): ProducerKind {
+    const explicit = this.unitDefs[role].producer
+    if (explicit) return explicit
+    if (this.isBaseRole(role)) return 'base'
+    if (this.unitDefs[role].flying) return 'airfield'
+    if (this.movementLayer(this.unitDefs[role]) === 'water') return 'seaFactory'
+    return 'factory'
   }
 
-  private isWaterProducedRole(role: UnitRole) {
-    return this.movementLayer(this.unitDefs[role]) === 'water'
+  private isBaseRole(role: UnitRole) {
+    return role === 'engineer' || role === 'scout' || role === 'tank'
   }
-
-  private isFactoryProducedRole(role: UnitRole) {
-    return !this.isBaseProducedRole(role) && !this.isAirProducedRole(role) && !this.isWaterProducedRole(role)
-	  }
 
   private queueBaseProduction(team: Team, role: UnitRole) {
-	    if (!this.isBaseProducedRole(role)) return false
+	    if (!this.isBaseProducedRole(role) || this.unitDefs[role].faction && this.unitDefs[role].faction !== this.teamFaction(team)) return false
 	    const base = team === 'player' ? this.playerBase : this.enemyBase
     if (this.productionSlotsUsed(base) >= 3) return false
     const alive = this.units.filter((unit) => unit.team === team && !unit.dead).length
@@ -2134,12 +2395,13 @@ export class PixiRts {
   private structureCost(kind: StructureKind) {
     const price = this.iniNumber(this.structureIniConfigs[kind]?.core?.price)
     if (price) return this.normalizeStructureCost(price)
-    if (kind === 'extractor') return 120
-	    if (kind === 'radar') return 90
-	    if (kind === 'repair') return 130
-	    if (kind === 'factory') return 220
-    if (kind === 'airfield') return 210
-    if (kind === 'seaFactory') return 245
+	    const family = this.structureFamily(kind)
+    if (family === 'extractor') return 120
+	    if (family === 'radar') return 90
+	    if (family === 'repair') return 130
+	    if (family === 'factory') return 220
+    if (family === 'airfield') return 210
+    if (family === 'seaFactory') return 245
 	    return 140
 	  }
 
@@ -2188,7 +2450,7 @@ export class PixiRts {
 	    const x = cell.x * GRID_SIZE + GRID_SIZE / 2
 	    const y = cell.y * GRID_SIZE + GRID_SIZE / 2
 	    const occupied = this.structures.some((structure) => !structure.dead && Math.hypot(structure.x - x, structure.y - y) < GRID_SIZE * 2)
-	    const extractorOk = kind !== 'extractor' || this.resourceNodes.some((node) => (
+	    const extractorOk = this.structureFamily(kind) !== 'extractor' || this.resourceNodes.some((node) => (
 	      Math.hypot(node.x - x, node.y - y) < 125 &&
 	      !this.resourceHasExtractor(node)
 	    ))
@@ -2342,6 +2604,7 @@ export class PixiRts {
     this.resetStructures()
     this.selectedUnits = []
     this.controlGroups = {}
+    this.commandPage = 0
     this.selectedCell = undefined
     this.activeBuilder = undefined
     this.dragState = undefined
@@ -2894,9 +3157,10 @@ export class PixiRts {
     const configuredRange = this.iniNumber(attack.maxattackrange)
     const configuredDelay = this.iniNumber(attack.shootdelay)
     const configuredDamage = this.iniProjectileDamage(projectile)
-	    const hp = configuredHp
-	      ? this.normalizeStructureHp(configuredHp)
-	      : kind === 'factory' ? 420 : kind === 'airfield' ? 360 : kind === 'seaFactory' ? 440 : kind === 'repair' ? 300 : kind === 'extractor' ? 220 : kind === 'radar' ? 180 : 260
+	    const family = this.structureFamily(kind)
+		    const hp = configuredHp
+		      ? this.normalizeStructureHp(configuredHp)
+		      : family === 'factory' ? 420 : family === 'airfield' ? 360 : family === 'seaFactory' ? 440 : family === 'repair' ? 300 : family === 'extractor' ? 220 : family === 'radar' ? 180 : 260
     const structure = {
       id: this.nextStructureId++,
       team,
@@ -2905,9 +3169,9 @@ export class PixiRts {
       y: cell.y * GRID_SIZE + GRID_SIZE / 2,
       hp,
       maxHp: hp,
-	      range: configuredRange ?? (kind === 'radar' ? 390 : kind === 'repair' ? 150 : kind === 'factory' || kind === 'airfield' || kind === 'seaFactory' ? 0 : 210),
-	      damage: kind === 'turret' ? configuredDamage ?? 18 : 0,
-	      cooldown: configuredDelay ?? (kind === 'factory' ? 420 : kind === 'airfield' ? 460 : kind === 'seaFactory' ? 500 : kind === 'repair' ? 36 : kind === 'radar' ? 90 : 42),
+	      range: configuredRange ?? (family === 'radar' ? 390 : family === 'repair' ? 150 : family === 'factory' || family === 'airfield' || family === 'seaFactory' ? 0 : 210),
+	      damage: family === 'turret' ? configuredDamage ?? 18 : 0,
+	      cooldown: configuredDelay ?? (family === 'factory' ? 420 : family === 'airfield' ? 460 : family === 'seaFactory' ? 500 : family === 'repair' ? 36 : family === 'radar' ? 90 : 42),
       attackCooldown: 18,
       canAttackFlying: attack.canattackflyingunits === undefined ? undefined : this.iniBoolean(attack.canattackflyingunits),
       canAttackLand: attack.canattacklandunits === undefined ? undefined : this.iniBoolean(attack.canattacklandunits),
@@ -2977,14 +3241,7 @@ export class PixiRts {
   }
 
 	  private spawnArmy(team: Team, count: number) {
-	    const roster: UnitRole[] = [
-	      'engineer',
-	      'tank',
-	      'scout',
-	      'tank',
-	      'engineer',
-	      'scout',
-	    ]
+	    const roster = this.factionRoster(team)
 
     for (let i = 0; i < count; i++) {
       const role = roster[i % roster.length]
@@ -3101,10 +3358,28 @@ export class PixiRts {
   private createFrameTextures(def: UnitDef) {
     if (def.frames) return def.frames
 
-    def.frames = Array.from({ length: def.frameCount }, (_, index) => new Texture(
+    const actualWidth = def.texture.baseTexture.width
+    const actualHeight = def.texture.baseTexture.height
+    if (actualWidth > 0 && actualHeight > 0 && (actualWidth < def.frameWidth || actualHeight < def.frameHeight)) {
+      def.frames = [def.texture]
+      def.frameWidth = actualWidth
+      def.frameHeight = actualHeight
+      def.frameCount = 1
+      return def.frames
+    }
+
+    const frameWidth = actualWidth > 0 ? Math.min(def.frameWidth, actualWidth) : def.frameWidth
+    const frameHeight = actualHeight > 0 ? Math.min(def.frameHeight, actualHeight) : def.frameHeight
+    const maxFrameCount = actualWidth > 0 ? Math.max(1, Math.floor(actualWidth / frameWidth)) : def.frameCount
+    const frameCount = Math.min(def.frameCount, maxFrameCount)
+
+    def.frames = Array.from({ length: frameCount }, (_, index) => new Texture(
       def.texture.baseTexture,
-      new Rectangle(index * def.frameWidth, 0, def.frameWidth, def.frameHeight),
+      new Rectangle(index * frameWidth, 0, frameWidth, frameHeight),
     ))
+    def.frameWidth = frameWidth
+    def.frameHeight = frameHeight
+    def.frameCount = frameCount
     return def.frames
   }
 
@@ -3384,24 +3659,26 @@ export class PixiRts {
 
 	  private ensureBaseBuilderProduction(team: Team, intent: AiIntent) {
 	    const base = team === 'player' ? this.playerBase : this.enemyBase
+	    const builderRole = this.builderRole(team)
+	    const frontlineRole = this.frontlineRole(team)
 	    const builders = this.teamBuilders(team).length
-    if (builders === 0 && base.production && base.production.role !== 'engineer') {
+	    if (builders === 0 && base.production && base.production.role !== builderRole) {
       base.production = undefined
       base.productionQueue = []
     }
-    if (base.production || base.productionQueue.length > 0 || this.resourcesFor(team) < this.unitCost('engineer')) return
+	    if (base.production || base.productionQueue.length > 0 || this.resourcesFor(team) < this.unitCost(builderRole)) return
 	    const reserve = this.economyBuildReserve(team)
-	    if (builders > 0 && this.resourcesFor(team) - reserve < Math.min(this.unitCost('engineer'), this.unitCost('tank'))) return
-    const desiredBuilders = intent.desiredBuilders
+	    if (builders > 0 && this.resourcesFor(team) - reserve < Math.min(this.unitCost(builderRole), this.unitCost(frontlineRole))) return
+	    const desiredBuilders = intent.desiredBuilders
 	    if (builders < desiredBuilders) {
-	      if (this.queueBaseProduction(team, 'engineer')) intent.lastAction = '基地生产工程师'
+	      if (this.queueBaseProduction(team, builderRole)) intent.lastAction = `基地生产${PRODUCTION_LABELS[builderRole]}`
 	      return
 	    }
 	
 	    const alive = this.units.filter((unit) => unit.team === team && !unit.dead).length
-	    const tanks = this.units.filter((unit) => !unit.dead && unit.team === team && unit.def.role === 'tank').length
-	    if (alive < this.unitCap(team, 8) && tanks < 4 && this.resourcesFor(team) - reserve >= this.unitCost('tank')) {
-	      if (this.queueBaseProduction(team, 'tank')) intent.lastAction = '基地生产小坦克'
+	    const frontlineCount = this.units.filter((unit) => !unit.dead && unit.team === team && unit.def.role === frontlineRole).length
+	    if (alive < this.unitCap(team, 8) && frontlineCount < 4 && this.resourcesFor(team) - reserve >= this.unitCost(frontlineRole)) {
+	      if (this.queueBaseProduction(team, frontlineRole)) intent.lastAction = `基地生产${PRODUCTION_LABELS[frontlineRole]}`
 	    }
 	  }
 
@@ -3422,19 +3699,24 @@ export class PixiRts {
 	    const unprotectedExtractor = this.unprotectedResourceNode(team)
 	    const repairlessExtractor = this.resourceNodeNeedingSupport(team, 'repair', 190)
 	    const damagedUnits = this.units.some((unit) => !unit.dead && unit.team === team && unit.hp < unit.maxHp * 0.55)
+	    const bugFaction = this.teamFaction(team) === 'bugs'
+	    const extractorBuildKind: StructureKind = bugFaction ? 'bugExtractor' : intent.tech > 0.78 ? 'extractorT3' : 'extractor'
+	    const factoryBuildKind: StructureKind = bugFaction ? 'bugGenerator' : intent.tech > 0.78 ? 'factoryT2' : 'factory'
+	    const turretBuildKind: StructureKind = bugFaction ? 'bugTurret' : intent.defense > 0.8 ? 'turretT2Gun' : 'turret'
+    const repairBuildKind: StructureKind = bugFaction ? 'bugNest' : intent.tech > 0.72 ? 'fabricatorT2' : 'repair'
 	
 	    const plan: StructureKind[] = []
     const desiredExtractors = Math.min(this.resourceNodes.length, intent.desiredExtractors)
-	    if (intent.economy > 0.45 && extractorTotal < desiredExtractors && extractorSlotsTaken < this.resourceNodes.length) plan.push('extractor')
-	    if (unprotectedExtractor && turretCount < extractorCount + 2) plan.push('turret')
-	    if ((repairlessExtractor || damagedUnits) && repairCount < Math.max(1, Math.min(3, extractorCount))) plan.push('repair')
-    if (factoryCount < 1 && factoryTotal < 1 && extractorCount >= 1 && this.resourcesFor(team) >= this.structureCost('factory') * 0.8) plan.push('factory')
-    if (intent.production > 0.52 && factoryTotal < intent.desiredFactories) plan.push('factory')
+	    if (intent.economy > 0.45 && extractorTotal < desiredExtractors && extractorSlotsTaken < this.resourceNodes.length) plan.push(extractorBuildKind)
+	    if (unprotectedExtractor && turretCount < extractorCount + 2) plan.push(turretBuildKind)
+	    if ((repairlessExtractor || damagedUnits) && repairCount < Math.max(1, Math.min(3, extractorCount))) plan.push(repairBuildKind)
+    if (factoryCount < 1 && factoryTotal < 1 && extractorCount >= 1 && this.resourcesFor(team) >= this.structureCost(factoryBuildKind) * 0.8) plan.push(factoryBuildKind)
+    if (intent.production > 0.52 && factoryTotal < intent.desiredFactories) plan.push(factoryBuildKind)
     if (intent.air > 0.55 && factoryCount > 0 && airfieldTotal < intent.desiredAirfields) plan.push('airfield')
 	    if (intent.tech > 0.46 && seaFactoryTotal < 1 && this.hasWaterAccess(team)) plan.push('seaFactory')
-	    if ((intent.defense > 0.58 || damagedUnits) && repairCount < 2) plan.push('repair')
-    if (intent.defense > 0.48 && turretCount < Math.max(4, extractorCount + 1)) plan.push('turret')
-    if (intent.tech > 0.55 && radarCount < 1) plan.push('radar')
+	    if ((intent.defense > 0.58 || damagedUnits) && repairCount < 2) plan.push(repairBuildKind)
+    if (intent.defense > 0.48 && turretCount < Math.max(4, extractorCount + 1)) plan.push(turretBuildKind)
+    if (intent.tech > 0.55 && radarCount < 1) plan.push(bugFaction ? 'bugNest' : 'radarT2')
 
     for (const kind of plan) {
       const builder = this.bestBuilderForPlan(builders)
@@ -3470,7 +3752,8 @@ export class PixiRts {
 	  }
 
   private findAiBuildCell(team: Team, builder: RtsUnit, kind: StructureKind) {
-    if (kind === 'extractor') {
+    const family = this.structureFamily(kind)
+    if (family === 'extractor') {
 	      const node = this.resourceNodes
 	        .filter((resource) => resource.amount > 0)
 	        .filter((resource) => !this.resourceHasExtractor(resource))
@@ -3481,14 +3764,14 @@ export class PixiRts {
 
     const base = team === 'player' ? this.playerBase : this.enemyBase
     const forward = team === 'player' ? 1 : -1
-    if (kind === 'seaFactory') {
+    if (family === 'seaFactory') {
       const waterCell = this.findClosestWaterBuildCell({ x: base.x + forward * 10, y: base.y })
       return waterCell ? this.findOpenBuildCellAround(waterCell, kind) : undefined
     }
     const resourceAnchor = this.resourceSupportAnchor(team, kind)
     const anchor = resourceAnchor ?? {
-      x: base.x + forward * (kind === 'turret' ? 6 : kind === 'factory' ? 7 : kind === 'airfield' ? 9 : 4),
-      y: base.y + (kind === 'repair' ? 5 : kind === 'radar' ? -6 : kind === 'airfield' ? -5 : 0),
+      x: base.x + forward * (family === 'turret' ? 6 : family === 'factory' ? 7 : family === 'airfield' ? 9 : 4),
+      y: base.y + (family === 'repair' ? 5 : family === 'radar' ? -6 : family === 'airfield' ? -5 : 0),
     }
     return this.findOpenBuildCellAround(anchor, kind)
   }
@@ -3529,21 +3812,22 @@ export class PixiRts {
   }
 
   private resourceSupportAnchor(team: Team, kind: StructureKind) {
-    const preferred = kind === 'turret'
+    const family = this.structureFamily(kind)
+    const preferred = family === 'turret'
       ? this.unprotectedResourceNode(team)
-      : kind === 'repair'
+      : family === 'repair'
         ? this.resourceNodeNeedingSupport(team, 'repair', 190)
         : this.frontlineResourceNode(team)
     if (!preferred) return undefined
 
     const cell = this.pixelToCell(preferred.x, preferred.y)
     const side = team === 'player' ? -1 : 1
-    if (kind === 'turret') return { x: cell.x + side * 2, y: cell.y + 1 }
-    if (kind === 'repair') return { x: cell.x + side * 3, y: cell.y + 3 }
-    if (kind === 'radar') return { x: cell.x + side * 2, y: cell.y - 4 }
-    if (kind === 'factory') return { x: cell.x + side * 5, y: cell.y + 5 }
-    if (kind === 'airfield') return { x: cell.x + side * 7, y: cell.y - 5 }
-    if (kind === 'seaFactory') return { x: cell.x + side * 5, y: cell.y + 4 }
+    if (family === 'turret') return { x: cell.x + side * 2, y: cell.y + 1 }
+    if (family === 'repair') return { x: cell.x + side * 3, y: cell.y + 3 }
+    if (family === 'radar') return { x: cell.x + side * 2, y: cell.y - 4 }
+    if (family === 'factory') return { x: cell.x + side * 5, y: cell.y + 5 }
+    if (family === 'airfield') return { x: cell.x + side * 7, y: cell.y - 5 }
+    if (family === 'seaFactory') return { x: cell.x + side * 5, y: cell.y + 4 }
     return cell
   }
 
@@ -3576,7 +3860,7 @@ export class PixiRts {
     return this.structures.some((structure) => (
       !structure.dead &&
       structure.team === team &&
-      structure.kind === kind &&
+      this.structureFamily(structure.kind) === kind &&
       Math.hypot(structure.x - node.x, structure.y - node.y) < radius
     ))
   }
@@ -3667,22 +3951,27 @@ export class PixiRts {
   }
 
 	  private teamStructures(team: Team, kind: StructureKind) {
-	    return this.structures.filter((structure) => !structure.dead && structure.team === team && structure.kind === kind)
-	  }
-	
+	    return this.structures.filter((structure) => !structure.dead && structure.team === team && this.structureFamily(structure.kind) === kind)
+		  }
+
 	  private completedTeamStructures(team: Team, kind: StructureKind) {
 	    return this.structures.filter((structure) => (
 	      !structure.dead &&
 	      !structure.construction &&
 	      structure.team === team &&
-	      structure.kind === kind
+	      this.structureFamily(structure.kind) === kind
 	    ))
 	  }
+
+  private structureFamily(kind: StructureKind): StructureFamily {
+    if (kind === 'turret' || kind === 'extractor' || kind === 'radar' || kind === 'repair' || kind === 'factory' || kind === 'airfield' || kind === 'seaFactory') return kind
+    return ADDITIONAL_STRUCTURE_CONTENT.find((entry) => entry.kind === kind)?.family ?? 'turret'
+  }
 	
-	  private resourceHasExtractor(node: ResourceNode) {
-	    return this.structures.some((structure) => (
-	      !structure.dead &&
-	      structure.kind === 'extractor' &&
+  private resourceHasExtractor(node: ResourceNode) {
+    return this.structures.some((structure) => (
+      !structure.dead &&
+      this.structureFamily(structure.kind) === 'extractor' &&
 	      Math.hypot(structure.x - node.x, structure.y - node.y) < 130
 	    ))
 	  }
@@ -3690,15 +3979,17 @@ export class PixiRts {
 	  private resourceCompletedExtractor(node: ResourceNode) {
 	    return this.structures
 	      .filter((structure) => (
-	        !structure.dead &&
-	        !structure.construction &&
-	        structure.kind === 'extractor' &&
+        !structure.dead &&
+        !structure.construction &&
+        this.structureFamily(structure.kind) === 'extractor' &&
 	        Math.hypot(structure.x - node.x, structure.y - node.y) < 130
 	      ))
 	      .sort((a, b) => Math.hypot(a.x - node.x, a.y - node.y) - Math.hypot(b.x - node.x, b.y - node.y))[0]
 	  }
 
   private structureLabel(kind: StructureKind) {
+    const registered = ADDITIONAL_STRUCTURE_CONTENT.find((entry) => entry.kind === kind)
+    if (registered) return registered.label
     if (kind === 'extractor') return '采集器'
 	    if (kind === 'factory') return '工厂'
 	    if (kind === 'airfield') return '空军基地'
@@ -3834,7 +4125,7 @@ export class PixiRts {
 	      !structure.dead &&
 	      !structure.construction &&
 	      structure.team === team &&
-	      structure.kind === 'extractor' &&
+      this.structureFamily(structure.kind) === 'extractor' &&
 	      Math.hypot(structure.x - node.x, structure.y - node.y) < 130
 	    )).length
 	
@@ -3844,7 +4135,7 @@ export class PixiRts {
   private structureGenerationRate(kind: StructureKind) {
     const raw = this.structureIniConfigs[kind]?.core?.generation_resources
     const credits = this.iniNumber(raw)
-    if (!credits) return kind === 'extractor' ? 0.13 : 0
+    if (!credits) return this.structureFamily(kind) === 'extractor' ? 0.13 : 0
     return credits * 0.016
   }
 
@@ -4817,7 +5108,8 @@ export class PixiRts {
         this.renderStructure(structure)
         continue
       }
-      if (structure.kind === 'turret') {
+      const family = this.structureFamily(structure.kind)
+      if (family === 'turret') {
         const target = this.findNearestEnemyForPoint(
           structure.team,
           structure.x,
@@ -4830,11 +5122,11 @@ export class PixiRts {
           this.fireStructureAt(structure, target)
           structure.attackCooldown = structure.cooldown
         }
-      } else if (structure.kind === 'repair' && delta > 0) {
+      } else if (family === 'repair' && delta > 0) {
         this.repairAround(structure, delta)
-	      } else if ((structure.kind === 'factory' || structure.kind === 'airfield' || structure.kind === 'seaFactory') && delta > 0) {
-	        this.updateFactoryProduction(structure, delta)
-      } else if (structure.kind === 'radar' && structure.attackCooldown <= 0 && delta > 0) {
+		      } else if ((family === 'factory' || family === 'airfield' || family === 'seaFactory') && delta > 0) {
+		        this.updateFactoryProduction(structure, delta)
+      } else if (family === 'radar' && structure.attackCooldown <= 0 && delta > 0) {
         this.radarPulse(structure)
         structure.attackCooldown = structure.cooldown
       }
@@ -4889,9 +5181,11 @@ export class PixiRts {
 	
   private queueStructureProduction(structure: StructureState, role: UnitRole) {
     if (structure.dead || structure.construction || this.productionSlotsUsed(structure) >= 3) return false
-	    if (structure.kind === 'factory' && !this.isFactoryProducedRole(role)) return false
-	    if (structure.kind === 'airfield' && !this.isAirProducedRole(role)) return false
-	    if (structure.kind === 'seaFactory' && !this.isWaterProducedRole(role)) return false
+	    if (this.unitDefs[role].faction && this.unitDefs[role].faction !== this.teamFaction(structure.team)) return false
+	    const family = this.structureFamily(structure.kind)
+	    if (family === 'factory' && !this.isFactoryProducedRole(role)) return false
+	    if (family === 'airfield' && !this.isAirProducedRole(role)) return false
+	    if (family === 'seaFactory' && !this.isWaterProducedRole(role)) return false
 	
 	    const alive = this.units.filter((unit) => unit.team === structure.team && !unit.dead).length
 	    if (alive >= this.unitCap(structure.team, 18)) return false
@@ -4922,55 +5216,69 @@ export class PixiRts {
   }
 
 	  private chooseStructureProductionRole(structure: StructureState): UnitRole | undefined {
-	    if (structure.kind === 'airfield') return this.chooseAirfieldRole(structure.team)
-	    if (structure.kind === 'seaFactory') return this.chooseSeaFactoryRole(structure.team)
+	    const family = this.structureFamily(structure.kind)
+	    if (family === 'airfield') return this.chooseAirfieldRole(structure.team)
+	    if (family === 'seaFactory') return this.chooseSeaFactoryRole(structure.team)
 	    return this.chooseFactoryRole(structure.team)
 	  }
 	
 	  private chooseAirfieldRole(team: Team): UnitRole | undefined {
-    const resources = this.resourcesFor(team)
-    const intent = this.aiIntent[team]
+	    const resources = this.resourcesFor(team)
+	    if (this.teamFaction(team) === 'bugs') {
+	      const roles: UnitRole[] = ['bugWasp', 'bugBee', 'bugFly']
+	      return roles.find((role) => resources >= this.unitCost(role))
+	    }
+	    const intent = this.aiIntent[team]
     const roles: UnitRole[] = intent.phase === 'assault' && resources > 230
-      ? ['bomber', 'fireBee', 'heavyInterceptor', 'gunship']
+      ? ['experimentalGunship', 'missileAirship', 'aaBeamGunshipAfterburn', 'experimentalDropship', 'bomber', 'fireBee', 'heavyInterceptor', 'gunship']
       : intent.phase === 'defend' || intent.phase === 'recover'
-        ? ['heavyInterceptor', 'interceptor', 'helicopter', 'spyDrone']
+        ? ['aaBeamGunship', 'mechFlyingTakeoff', 'heavyInterceptor', 'interceptor', 'amphibiousJet', 'helicopter', 'spyDrone']
         : resources > 230
-          ? ['bomber', 'gunship', 'heavyInterceptor', 'fireBee']
+          ? ['amphibiousJet', 'bomber', 'gunship', 'aaBeamGunship', 'heavyInterceptor', 'fireBee']
           : resources > 135
-            ? ['helicopter', 'gunship', 'interceptor']
+            ? ['mechFlyingTakeoff', 'helicopter', 'gunship', 'interceptor']
             : ['spyDrone', 'interceptor']
 	    return roles.find((role) => this.resourcesFor(team) >= this.unitCost(role)) ?? roles[roles.length - 1]
 	  }
 
   private chooseSeaFactoryRole(team: Team): UnitRole | undefined {
-    const resources = this.resourcesFor(team)
-    const intent = this.aiIntent[team]
+    if (this.teamFaction(team) === 'bugs') return undefined
+	    const resources = this.resourcesFor(team)
+	    const intent = this.aiIntent[team]
     const roles: UnitRole[] = intent.phase === 'assault'
-      ? ['battleship', 'missileShip', 'aaShip', 'lightSub']
+      ? ['experimentalCarrier', 'heavySub', 'nautilusSubmarineSurface', 'battleship', 'missileShip', 'aaShip', 'lightSub']
       : intent.phase === 'defend' || intent.phase === 'recover'
-        ? ['aaShip', 'lightSub', 'battleship']
-        : ['lightSub', 'aaShip', 'battleship', 'missileShip']
+        ? ['nautilusSubmarine', 'aaShip', 'heavySub', 'lightSub', 'battleship']
+        : ['amphibiousJetUnderwater', 'lightSub', 'nautilusSubmarineSurface', 'aaShip', 'battleship', 'missileShip']
     return roles.find((role) => resources >= this.unitCost(role)) ?? roles[roles.length - 1]
   }
 	
-  private chooseFactoryRole(team: Team): UnitRole {
-    const resources = this.resourcesFor(team)
-    const intent = this.aiIntent[team]
+	  private chooseFactoryRole(team: Team): UnitRole {
+	    const resources = this.resourcesFor(team)
+	    const intent = this.aiIntent[team]
+	    if (this.teamFaction(team) === 'bugs') {
+	      const roles: UnitRole[] = intent.phase === 'assault'
+	        ? ['bugMeleeT31', 'bugRangedT2', 'bugMeleeLarge', 'bugSpore']
+	        : intent.phase === 'defend' || intent.phase === 'recover'
+	          ? ['bugRanged', 'bugSpore', 'bugMeleeLarge']
+	          : ['bugMelee', 'bugRanged', 'bugMeleeSmall', 'bugPickup']
+	      return roles.find((role) => resources >= this.unitCost(role)) ?? roles[0]
+    }
     if ((intent.phase === 'defend' || intent.phase === 'recover') && resources > 95) {
-      const roles: UnitRole[] = ['missile', 'laser', 'plasma', 'heavyArtillery']
+      const roles: UnitRole[] = ['mechBunker', 'mechFlame', 'mechLaser', 'missile', 'laser', 'plasma', 'heavyArtillery']
       return roles[Math.floor(this.random() * roles.length)]
     }
     if (intent.phase === 'assault' && resources > 245) {
-      const roles: UnitRole[] = ['experimental', 'mammoth', 'missile', 'heavyArtillery']
+      const roles: UnitRole[] = ['experimentalSpider', 'modularSpider', 'mechHeavyMissile', 'experimentalGunshipLanded', 'experimental', 'mammoth', 'missile', 'heavyArtillery']
       return roles[Math.floor(this.random() * roles.length)]
     }
     if (intent.tech > 0.7 && resources > 240) {
-      const roles: UnitRole[] = ['experimental', 'mammoth', 'laser', 'heavyArtillery']
+      const roles: UnitRole[] = ['mechArtillery', 'mechMinigun', 'mechLightning', 'experimentalSpider', 'experimental', 'mammoth', 'laser', 'heavyArtillery']
       return roles[Math.floor(this.random() * roles.length)]
     }
     if (resources > 145) {
-      const roles: UnitRole[] = ['plasma', 'missile', 'laser', 'artillery']
-	      return roles[Math.floor(this.random() * roles.length)]
+      const roles: UnitRole[] = ['mechGun', 'mechMissile', 'mechArtillery', 'plasma', 'missile', 'laser', 'artillery']
+      return roles[Math.floor(this.random() * roles.length)]
 	    }
 	    return 'plasma'
 	  }
@@ -5011,7 +5319,7 @@ export class PixiRts {
     structure.flash.clear()
     structure.flash.alpha = 1
     structure.flash.beginFill(color, 0.9)
-    structure.flash.drawCircle(0, structure.kind === 'turret' ? -22 : -13, 5)
+    structure.flash.drawCircle(0, this.structureFamily(structure.kind) === 'turret' ? -22 : -13, 5)
     structure.flash.endFill()
 
     this.projectiles.push({
@@ -5031,12 +5339,13 @@ export class PixiRts {
 	    })
 	  }
 
-	  private renderStructure(structure: StructureState) {
+  private renderStructure(structure: StructureState) {
 	    structure.view.clear()
 	    structure.view.position.set(structure.x, structure.y)
-	    const accent = structure.team === 'player' ? 0x67e8a5 : 0xff6b6b
-	    const teamTint = structure.team === 'player' ? 0xe3fff0 : 0xffd7d7
-	    const config = STRUCTURE_TEXTURES[structure.kind]
+    const accent = structure.team === 'player' ? 0x67e8a5 : 0xff6b6b
+    const teamTint = structure.team === 'player' ? 0xe3fff0 : 0xffd7d7
+    const config = STRUCTURE_TEXTURES[structure.kind]
+    const family = this.structureFamily(structure.kind)
 	    const dormantBlueprint = this.isDormantBlueprint(structure)
 	    const constructionProgress = structure.construction
 	      ? structure.construction.progress / Math.max(1, structure.construction.duration)
@@ -5064,7 +5373,7 @@ export class PixiRts {
       )
       if (target && !structure.dead) {
         this.aimStructureTurret(structure, target)
-      } else if (structure.kind === 'radar') {
+      } else if (family === 'radar') {
         structure.turretSprite.rotation += 0.02
       }
       structure.turretSprite.x = config.turretOffsetX ?? 0
@@ -5104,9 +5413,9 @@ export class PixiRts {
       structure.hpBar.endFill()
     }
 
-	    if ((structure.kind === 'radar' || structure.kind === 'repair') && !structure.dead && !dormantBlueprint) {
-	      structure.view.lineStyle(1, accent, structure.kind === 'radar' ? 0.18 : 0.12)
-	      structure.view.drawCircle(0, 0, structure.kind === 'radar' ? structure.range : structure.range * 0.55)
+    if ((family === 'radar' || family === 'repair') && !structure.dead && !dormantBlueprint) {
+      structure.view.lineStyle(1, accent, family === 'radar' ? 0.18 : 0.12)
+      structure.view.drawCircle(0, 0, family === 'radar' ? structure.range : structure.range * 0.55)
 	    }
 
     structure.flash.alpha *= 0.75
@@ -5365,7 +5674,8 @@ export class PixiRts {
     }
     for (const structure of this.structures) {
       if (structure.dead || structure.team !== 'player') continue
-      const radius = structure.kind === 'radar' ? Math.max(18, Math.round(structure.range / GRID_SIZE)) : structure.kind === 'seaFactory' ? 8 : 6
+      const family = this.structureFamily(structure.kind)
+      const radius = family === 'radar' ? Math.max(18, Math.round(structure.range / GRID_SIZE)) : family === 'seaFactory' ? 8 : 6
       reveal(structure.x, structure.y, radius)
     }
 
@@ -5407,13 +5717,15 @@ export class PixiRts {
     const y = base.y * GRID_SIZE
     const centerX = x + GRID_SIZE / 2
     const centerY = y + GRID_SIZE / 2
+    const baseTexture = this.teamFaction(base.team) === 'bugs' ? BUG_HQ_TEXTURE : HQ_TEXTURE
     if (!base.sprite) {
-      base.sprite = new Sprite(HQ_TEXTURE)
+      base.sprite = new Sprite(baseTexture)
       base.sprite.anchor.set(0.5)
-      base.sprite.width = 74
-      base.sprite.height = 96
       this.terrainLayer.addChild(base.sprite as any)
     }
+    base.sprite.texture = baseTexture
+    base.sprite.width = baseTexture === BUG_HQ_TEXTURE ? 72 : 74
+    base.sprite.height = baseTexture === BUG_HQ_TEXTURE ? 70 : 96
     base.sprite.position.set(centerX, centerY)
     base.sprite.tint = base.team === 'player' ? 0xe3fff0 : 0xffd7d7
     base.sprite.alpha = base.hp <= 0 ? 0.4 : 1
@@ -5619,20 +5931,36 @@ export class PixiRts {
     return Math.round(rate * 60)
   }
 
-  private commandRows() {
-    return [
-      ...PRODUCTION_BINDINGS.map((binding) => `${binding.key} ${PRODUCTION_LABELS[binding.role]} ${this.unitCost(binding.role)}`),
-      `T 炮塔 ${this.structureCost('turret')}`,
-      `Y 采集 ${this.structureCost('extractor')}`,
-      `U 雷达 ${this.structureCost('radar')}`,
-      `I 维修 ${this.structureCost('repair')}`,
-      `O 工厂 ${this.structureCost('factory')}`,
-      `P 空军 ${this.structureCost('airfield')}`,
-      `[ 船厂 ${this.structureCost('seaFactory')}`,
-      `4 武器研究 ${this.researchCost('player', 'weapons')}`,
-      `5 装甲研究 ${this.researchCost('player', 'armor')}`,
-      `6 后勤研究 ${this.researchCost('player', 'logistics')}`,
+  private commandEntries(): CommandEntry[] {
+    const units = [...PRODUCTION_BINDINGS, ...ADDITIONAL_PRODUCTION_BINDINGS]
+      .map((binding): CommandEntry => ({ kind: 'unit', role: binding.role }))
+    const structures: StructureKind[] = [
+      'turret',
+      'extractor',
+      'radar',
+      'repair',
+      'factory',
+      'airfield',
+      'seaFactory',
+      ...ADDITIONAL_STRUCTURE_CONTENT.map((entry) => entry.kind),
     ]
+    const buildCommands = structures.map((structure): CommandEntry => ({ kind: 'structure', structure }))
+    const research = (['weapons', 'armor', 'logistics'] as ResearchKey[]).map((key): CommandEntry => ({ kind: 'research', research: key }))
+    return [...units, ...buildCommands, ...research]
+  }
+
+  private commandPageCount() {
+    return Math.max(1, Math.ceil(this.commandEntries().length / 12))
+  }
+
+  private commandRows() {
+    const entries = this.commandEntries()
+    const start = this.commandPage * 12
+    return entries.slice(start, start + 12).map((entry) => {
+      if (entry.kind === 'unit') return `· ${PRODUCTION_LABELS[entry.role]} ${this.unitCost(entry.role)}`
+      if (entry.kind === 'structure') return `· ${this.structureLabel(entry.structure)} ${this.structureCost(entry.structure)}`
+      return `· ${this.researchLabel(entry.research)}研究 ${this.researchCost('player', entry.research)}`
+    })
   }
 
   private handleUiClick(event: PointerEvent) {
@@ -5688,19 +6016,15 @@ export class PixiRts {
     const buttonY = gridY + row * (buttonH + rowGap)
     if (point.x > buttonX + buttonW || point.y > buttonY + buttonH) return false
 
-    const commandIndex = row * 3 + column
+    const commandIndex = this.commandPage * 12 + row * 3 + column
     const commands = this.commandRows()
-    if (commandIndex >= commands.length) return false
+    const entries = this.commandEntries()
+    if (commandIndex >= entries.length || row * 3 + column >= commands.length) return false
 
-    if (commandIndex < PRODUCTION_BINDINGS.length) {
-      this.produceUnit(PRODUCTION_BINDINGS[commandIndex].role)
-    } else if (commandIndex < PRODUCTION_BINDINGS.length + 7) {
-      const structures: StructureKind[] = ['turret', 'extractor', 'radar', 'repair', 'factory', 'airfield', 'seaFactory']
-      this.buildStructureAtSelection(structures[commandIndex - PRODUCTION_BINDINGS.length])
-    } else {
-      const research: ResearchKey[] = ['weapons', 'armor', 'logistics']
-      this.queueResearch('player', research[commandIndex - PRODUCTION_BINDINGS.length - 7])
-    }
+    const command = entries[commandIndex]
+    if (command.kind === 'unit') this.produceUnit(command.role)
+    else if (command.kind === 'structure') this.buildStructureAtSelection(command.structure)
+    else this.queueResearch('player', command.research)
     this.drawUi()
     return true
   }
@@ -5715,9 +6039,9 @@ export class PixiRts {
     const playerTurrets = this.structures.filter((structure) => structure.team === 'player' && !structure.dead).length
     const enemyTurrets = this.structures.filter((structure) => structure.team === 'enemy' && !structure.dead).length
     const controlledNodes = this.resourceNodes.filter((node) => node.controller === 'player').length
-	    const playerFactories = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'factory' && !structure.dead)
-	    const playerAirfields = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'airfield' && !structure.dead)
-	    const playerSeaFactories = this.structures.filter((structure) => structure.team === 'player' && structure.kind === 'seaFactory' && !structure.dead)
+	    const playerFactories = this.completedTeamStructures('player', 'factory')
+	    const playerAirfields = this.completedTeamStructures('player', 'airfield')
+	    const playerSeaFactories = this.completedTeamStructures('player', 'seaFactory')
 	    const activeFactoryJobs = playerFactories.reduce((sum, structure) => sum + this.productionSlotsUsed(structure), 0)
 	    const activeAirJobs = playerAirfields.reduce((sum, structure) => sum + this.productionSlotsUsed(structure), 0)
 	    const activeSeaJobs = playerSeaFactories.reduce((sum, structure) => sum + this.productionSlotsUsed(structure), 0)
@@ -5854,7 +6178,7 @@ export class PixiRts {
         `工厂 ${activeFactoryJobs}/${playerFactories.length * 3}  空军 ${activeAirJobs}/${playerAirfields.length * 3}`,
         `船厂 ${activeSeaJobs}/${playerSeaFactories.length * 3}`,
         `科技 武${this.tech.player.weapons} 装${this.tech.player.armor} 后${this.tech.player.logistics}  研究 ${researchStatus}`,
-        `AI ${this.mapModeLabel(this.mapMode)}·${this.aiPhaseLabel(this.aiIntent.enemy.phase)} ${this.aiIntent.enemy.lastAction}`,
+        `内容 ${this.playerFaction === 'bugs' ? '虫族' : '机甲'}  AI ${this.mapModeLabel(this.mapMode)}·${this.aiPhaseLabel(this.aiIntent.enemy.phase)} ${this.aiIntent.enemy.lastAction}  页${this.commandPage + 1}/${this.commandPageCount()}`,
         `选中 ${selected}${this.selectedUnits.length > 1 ? `  血量 ${selectedPower}` : ''}`,
         this.stressMode ? '压测: 1000单位同屏' : '',
       ].filter(Boolean).join('\n')
